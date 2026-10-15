@@ -1,0 +1,21 @@
+{
+  "name": "xyb-private-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot privado de Discord con prefijo xyb y comandos slash.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/register-commands.js",
+    "test": "node --test",
+    "check:images": "node scripts/check-images.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.6.1"
+  }
+}
