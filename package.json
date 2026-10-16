@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
+    "@fontsource/roboto": "^5.3.0",
     "@napi-rs/canvas": "^0.1.100",
     "discord.js": "^14.25.1",
     "dotenv": "^16.6.1"

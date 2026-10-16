@@ -1,5 +1,10 @@
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
+
+// Railway's container does not guarantee a system font. Bundle Roboto with the
+// bot and register it before drawing so card labels never disappear in production.
+GlobalFonts.registerFromPath(require.resolve('@fontsource/roboto/files/roboto-latin-400-normal.woff'), 'XYB Roboto');
+GlobalFonts.registerFromPath(require.resolve('@fontsource/roboto/files/roboto-latin-700-normal.woff'), 'XYB Roboto');
 
 const avatars = new Map();
 const AVATAR_TTL = 5 * 60_000;
@@ -33,10 +38,10 @@ async function card({ left, right, title, subtitle, badge = '💗', color = '#f4
   ctx.fillStyle = `${color}33`; ctx.beginPath(); ctx.arc(400, 150, 145, 0, Math.PI * 2); ctx.fill();
   const [leftAvatar, rightAvatar] = await Promise.all([avatar(left), avatar(right)]);
   circle(ctx, leftAvatar, 145, 152, '#f48fb1'); circle(ctx, rightAvatar, 655, 152, '#a7d8ff');
-  ctx.textAlign = 'center'; ctx.fillStyle = '#fff7fb'; ctx.font = 'bold 30px sans-serif'; ctx.fillText(badge, 400, 94);
-  ctx.font = 'bold 42px sans-serif'; ctx.fillStyle = color; ctx.fillText(trim(title, 26), 400, 152);
-  ctx.font = '20px sans-serif'; ctx.fillStyle = '#f7dce8'; ctx.fillText(trim(subtitle, 52), 400, 189);
-  ctx.font = 'bold 19px sans-serif'; ctx.fillStyle = '#ffffff'; ctx.fillText(trim(left?.globalName ?? left?.username), 145, 260); ctx.fillText(trim(right?.globalName ?? right?.username), 655, 260);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff7fb'; ctx.font = '700 30px "XYB Roboto"'; ctx.fillText(badge, 400, 78);
+  ctx.font = '700 48px "XYB Roboto"'; ctx.fillStyle = color; ctx.fillText(trim(title, 26), 400, 145);
+  ctx.font = '400 21px "XYB Roboto"'; ctx.fillStyle = '#f7dce8'; ctx.fillText(trim(subtitle, 52), 400, 190);
+  ctx.font = '700 19px "XYB Roboto"'; ctx.fillStyle = '#ffffff'; ctx.fillText(trim(left?.globalName ?? left?.username), 145, 260); ctx.fillText(trim(right?.globalName ?? right?.username), 655, 260);
   const attachment = new AttachmentBuilder(canvas.toBuffer('image/png'), { name: file });
   const embed = new EmbedBuilder().setColor(color.replace('#', '')).setImage(`attachment://${file}`).setFooter({ text: '🐰 xyb' });
   return { embeds: [embed], files: [attachment], allowedMentions: { parse: [] } };
