@@ -1,6 +1,7 @@
 const marriage = require('../lib/marriage');
 const props = require('../lib/marriage-props');
 const { prepareKissPayload } = require('../lib/kiss-media');
+const socialCard = require('../lib/social-card');
 
 module.exports = {
   name: 'marry',
@@ -38,7 +39,12 @@ module.exports = {
     }
 
     // Todavía no se casan: aquí solo va la propuesta con sus botones.
-    const payload = await prepareKissPayload(props.proposalPayload(user, person));
+    let payload = await prepareKissPayload(props.proposalPayload(user, person));
+    // A bad third-party GIF must never leave an empty marriage proposal.
+    if (!payload.files?.length) {
+      payload = await socialCard.card({ left: user, right: person, title: '¡PROPUESTA!', subtitle: `${user.username} + ${person.username}`, badge: '💍', color: '#ffb6c1', file: 'proposal-card.png', variant: 'ship' });
+      payload.content = `💍 ${user} le está pidiendo la mano a ${person}.`;
+    }
     payload.components = [props.buttons(user.id, person.id)];
     await reply(payload);
   },
