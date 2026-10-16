@@ -3,6 +3,7 @@ const props = require('../lib/marriage-props');
 
 module.exports = {
   name: 'marry',
+  resolveMember: true,
   aliases: ['casar', 'casarse', 'pedirmatrimonio'],
   description: 'Le pide la mano. La otra persona tiene que aceptar.',
   usage: 'xyb marry [persona]',

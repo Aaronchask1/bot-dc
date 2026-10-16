@@ -15,6 +15,7 @@ async function fetchUserWithBanner(client, user) {
 
 module.exports = {
   name: 'banner',
+  resolveMember: true,
   aliases: ['bn', 'fondo'],
   description: 'Muestra el banner de alguien (imagen de perfil de Nitro).',
   usage: 'xyb banner [persona]',

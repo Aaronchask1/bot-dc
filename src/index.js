@@ -1,5 +1,4 @@
 require('dotenv').config();
-const fs = require('node:fs');
 const path = require('node:path');
 
 const {
@@ -25,6 +24,10 @@ const hugs = require('./lib/hugs');
 const marriageProps = require('./lib/marriage-props');
 const members = require('./lib/members');
 const lookup = require('./commands/lookup');
+const kisses = require('./lib/kisses');
+const profiles = require('./lib/profiles');
+const profileCommand = require('./commands/profile');
+const { prepareKissPayload } = require('./lib/kiss-media');
 const logger = require('./logger');
 
 const PREFIX = 'xyb';
@@ -36,7 +39,6 @@ const repeatTracker = new Map();
 const claimMessage = createReplayGuard();
 const claimInteraction = createReplayGuard();
 const LOCK_FILE = path.join(__dirname, '..', 'data', 'bot.lock');
-const KISS_STORE = path.join(__dirname, '..', 'data', 'kiss-counts.json');
 // Los besos y regalos son imágenes grandes, revisadas a ojo. Discord las
 // dibuja a su resolución real, por eso estas listas evitan GIF pequeños.
 const KISS_IMAGES = [
@@ -327,23 +329,7 @@ async function handlePrefixModeration(message) {
 }
 
 
-function kissKey(guildId, firstUserId, secondUserId) {
-  return [guildId, firstUserId, secondUserId].join(':');
-}
-
-function addKiss(guildId, firstUserId, secondUserId) {
-  let counts = {};
-  try {
-    counts = JSON.parse(fs.readFileSync(KISS_STORE, 'utf8'));
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-  const key = kissKey(guildId, firstUserId, secondUserId);
-  counts[key] = (counts[key] || 0) + 1;
-  fs.mkdirSync(path.dirname(KISS_STORE), { recursive: true });
-  fs.writeFileSync(KISS_STORE, `${JSON.stringify(counts, null, 2)}\n`);
-  return counts[key];
-}
+const addKiss = kisses.add;
 
 function randomKissImage(images) {
   return images[Math.floor(Math.random() * images.length)];
@@ -365,7 +351,7 @@ function kissPayload(from, to, count, mode = 'send') {
   const description = {
     send: `${from} le da un dulce beso a ${to}.\n\n${times}`,
     gift: `💞 ${to} le devuelve el beso a ${from}.\n\n${times}`,
-    reject: `💔 ${to} rechazó el beso de ${from}.\n\n💔 Se acabou la buena racha.`,
+    reject: `💔 ${to} rechazó el beso de ${from}.\n\nEl contador compartido se conserva.`,
   }[mode] ?? `${from} le da un dulce beso a ${to}.\n\n${times}`;
 
   return {
@@ -599,7 +585,7 @@ client.on(Events.MessageCreate, async (message) => {
 
 async function handleMessage(message) {
   if (await applyRepeatSpamProtection(message)) return;
-
+  if (message.guild && !message.author.bot) profiles.observe(message.guild.id, message.author.id);
 
   normalizeCustomPrefix(message);
   if (await extraCommands.handlePrefixCommand(message)) return;
@@ -640,8 +626,9 @@ async function handleMessage(message) {
       return;
     }
     const rawTarget = messageParts.slice(2).join(' ');
-    const found = await members.resolveMemberAsync(message.guild, rawTarget);
-    const target = message.mentions.users.first() ?? found.member?.user;
+    const mentioned = message.mentions.users.first();
+    const found = mentioned ? { member: null } : await members.resolveMemberAsync(message.guild, rawTarget);
+    const target = mentioned ?? found.member?.user;
     if (!target || target.bot || target.id === message.author.id) {
       const detail = found.reason === 'ambiguous'
         ? 'Hay varias personas con ese nombre; menciónala o usa su ID.'
@@ -653,7 +640,7 @@ async function handleMessage(message) {
     }
     const count = addKiss(message.guild.id, message.author.id, target.id);
     await message.channel.send({
-      ...kissPayload(message.author, target, count),
+      ...await prepareKissPayload(kissPayload(message.author, target, count)),
       components: [kissButtons(message.author.id, target.id)],
     });
     return;
@@ -716,6 +703,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 async function handleInteraction(interaction) {
+  if (await profileCommand.handleComponent(interaction)) return;
   if (await lookup.handleComponent(interaction)) return;
   // Panel de bienvenida, abrazos y propuestas de matrimonio.
   if (await welcome.handleComponent(interaction)) return;
@@ -730,15 +718,25 @@ async function handleInteraction(interaction) {
       await interaction.reply({ content: 'Solo la persona que recibió el beso puede responder.', flags: MessageFlags.Ephemeral });
       return;
     }
+    if (!['return', 'reject'].includes(response)) return;
+    if (!interaction.message?.createdTimestamp || Date.now() - interaction.message.createdTimestamp > 86400_000) {
+      await interaction.reply({ content: 'Este beso caducó. Envía uno nuevo para corresponderlo.', flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await interaction.deferReply();
+    if (!kisses.claimResponse(interaction.message.id)) {
+      await interaction.editReply({ content: 'Este beso ya recibió una respuesta.' });
+      return;
+    }
     if (response === 'return') {
       const count = addKiss(interaction.guild.id, fromId, toId);
       // Respuesta visible para todo el canal, con la imagen del regalo de besos.
-      await interaction.reply(kissPayload(`<@${fromId}>`, `<@${toId}>`, count, 'gift'));
+      await interaction.editReply(await prepareKissPayload(kissPayload(`<@${fromId}>`, `<@${toId}>`, count, 'gift')));
       await clearKissButtons(interaction);
       return;
     }
     if (response === 'reject') {
-      await interaction.reply(kissPayload(`<@${fromId}>`, `<@${toId}>`, 0, 'reject'));
+      await interaction.editReply(await prepareKissPayload(kissPayload(`<@${fromId}>`, `<@${toId}>`, 0, 'reject')));
       await clearKissButtons(interaction);
     }
     return;
@@ -779,8 +777,9 @@ async function handleInteraction(interaction) {
       return;
     }
     const count = addKiss(interaction.guild.id, interaction.user.id, target.id);
-    await interaction.reply({
-      ...kissPayload(interaction.user, target, count),
+    await interaction.deferReply();
+    await interaction.editReply({
+      ...await prepareKissPayload(kissPayload(interaction.user, target, count)),
       components: [kissButtons(interaction.user.id, target.id)],
     });
     return;

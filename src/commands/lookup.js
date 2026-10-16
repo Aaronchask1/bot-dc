@@ -10,21 +10,32 @@ const sessions = new Map();
 const SESSION_MS = 15 * 60_000;
 const MAX_SESSIONS = 1000;
 const MODE_LABELS = { todos: 'Todos', letras: 'Letras', numeros: 'Números', sin_simbolos: 'Sin símbolos' };
-const USAGE = 'Usa `xyb lookup 3`, `xyb lookup 4`, `xyb lookup vanity 5` o `xyb lookup 6 texto`. Longitud: 2 a 32.';
+const USAGE = 'Usa `.lookup 3`, `.lookup 4`, `.lookup vanity 5`, `.lookup todos` o `.lookup check nombre`. Longitud: 2 a 32; texto opcional después de la longitud.';
 
 function parseArgs(args) {
   const rest = [...args].map((value) => value.toLowerCase());
   let type = 'usernames';
   if (['vanity', 'vanities'].includes(rest[0])) { type = 'vanities'; rest.shift(); }
   else if (['username', 'usernames', 'nombres'].includes(rest[0])) rest.shift();
-  let length = null;
+  if (rest[0] === 'check') {
+    const exactName = rest[1];
+    if (rest.length !== 2 || !history.validName(type, exactName)) return { error: USAGE };
+    return { type, length: exactName.length, query: exactName, exactName, mode: 'todos', page: 0 };
+  }
+  let length = 3;
+  if (['todos', 'all'].includes(rest[0])) { length = null; rest.shift(); }
   if (/^\d+$/.test(rest[0] ?? '')) {
     length = Number(rest.shift());
     if (length < 2 || length > 32) return { error: USAGE };
   }
   const query = rest.join(' ');
-  if (query && !/^[a-z0-9_.-]{1,32}$/.test(query)) return { error: USAGE };
+  if (!validFilters({ type, length, query, mode: 'todos' })) return { error: USAGE };
   return { type, length, query, mode: 'todos', page: 0 };
+}
+
+function validFilters({ type, length, query, mode }) {
+  return query.length <= (length ?? 32) && !query.includes('..')
+    && [...query].every((character) => history.alphabet(type, mode).includes(character));
 }
 
 function createSession(user, guildId, filters, now = Date.now()) {
@@ -46,19 +57,18 @@ function button(session, action, emoji, style = ButtonStyle.Secondary, disabled 
 }
 
 function panel(session, { closed = false } = {}) {
-  const result = history.search(session.guildId, session);
+  const result = history.search(session);
   session.page = result.page;
-  const title = session.type === 'vanities' ? 'Dropped Vanities' : 'Dropped Usernames';
+  const title = session.type === 'vanities' ? 'Vanity Lookup' : 'Username Lookup';
   const filters = [session.length ? `${session.length} caracteres` : 'Todas las longitudes'];
   if (session.mode !== 'todos') filters.push(MODE_LABELS[session.mode]);
   if (session.query) filters.push(`contiene \`${session.query}\``);
-  const lines = result.entries.map(({ username, detectedAt }) =>
-    `\`${username}\` · <t:${Math.floor(detectedAt / 1000)}:R>`);
-  const empty = result.recorded
-    ? 'No hay resultados con estos filtros. Usa 🔎 para buscar o ⚙️ para cambiar los filtros.'
-    : session.type === 'vanities'
-      ? 'Todavía no he detectado vanities abandonadas. Aparecerán cuando vea cambiar una URL personalizada en un servidor donde estoy.'
-      : 'Todavía no he detectado nombres abandonados en este servidor. Aparecerán cuando vea un cambio de nombre de usuario.';
+  const lines = result.entries.map(({ username, checkedAt }) =>
+    `\`${username}\` · comprobado <t:${Math.floor(checkedAt / 1000)}:R>`);
+  const empty = 'Todavía no hay coincidencias comprobadas con estos filtros. 🔎 busca otra tanda; ⚙️ cambia los filtros.';
+  const caveat = session.type === 'vanities'
+    ? 'Sin invitación activa; NO garantiza que puedas asignar esa vanity.'
+    : 'Discord indicó disponibles al comprobarlos; no están reservados.';
   const container = new ContainerBuilder().setAccentColor(0x333333)
     .addSectionComponents(new SectionBuilder()
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}\n-# ${filters.join(' · ')}`))
@@ -67,16 +77,56 @@ function panel(session, { closed = false } = {}) {
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n') || empty))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      `-# Página ${result.page + 1}/${result.pages} · ${result.total} resultados${closed ? ' · Cerrado' : ''}\n-# Detectados por XYB · Disponibilidad sin comprobar`,
+      `-# Página ${result.page + 1}/${result.pages} · ${result.total} resultados${closed ? ' · Cerrado' : ''}\n${session.notice ?? 'Preparando búsqueda global…'}\n-# ${caveat}`,
     ))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
       button(session, 'prev', '◀️', ButtonStyle.Secondary, closed || result.page === 0),
       button(session, 'next', '▶️', ButtonStyle.Secondary, closed || result.page >= result.pages - 1),
-      button(session, 'search', '🔎', ButtonStyle.Secondary, closed),
+      button(session, 'search', '🔎', ButtonStyle.Secondary, closed || Boolean(session.running)),
       button(session, 'close', '⛔', ButtonStyle.Danger, closed),
-      button(session, 'filter', '⚙️', ButtonStyle.Secondary, closed),
+      button(session, 'filter', '⚙️', ButtonStyle.Secondary, closed || Boolean(session.running)),
     ));
   return { flags: MessageFlags.IsComponentsV2, components: [container], allowedMentions: { parse: [] } };
+}
+
+async function runSearch(session, edit, service = history) {
+  session.running = true;
+  session.notice = 'Consultando hasta 12 candidatos globales (aprox. 1 minuto)…';
+  // Serializa ediciones: cerrar el panel no puede ser revertido por un progreso pendiente.
+  const publish = () => {
+    session.edits = (session.edits ?? Promise.resolve()).then(() => edit(panel(session, { closed: Boolean(session.cancelled) })));
+    return session.edits;
+  };
+  try {
+    await publish();
+    const result = await service.discover(session, {
+      exactName: session.exactName,
+      shouldStop: () => Boolean(session.cancelled) || session.expiresAt <= Date.now(),
+      onProgress: async ({ checked, found, total }) => {
+        session.notice = `Consultando ${checked}/${total} · ${found} coincidencias en esta tanda…`;
+        if (!session.cancelled) await publish();
+      },
+    });
+    const statuses = {
+      complete: `Tanda terminada: ${result.checked} consultados · ${result.found} coincidencias. 🔎 para otra tanda.`,
+      busy: 'Ya hay otra búsqueda global en marcha. Inténtalo cuando termine.',
+      limited: `Discord limitó las consultas. Reintenta ${result.retryAt ? `<t:${Math.ceil(result.retryAt / 1000)}:R>` : 'más tarde'}.`,
+      restricted: 'Discord restringió la consulta. Se detuvo sin intentar saltar la restricción.',
+      unavailable: 'Discord no dio una respuesta verificable. Inténtalo más tarde.',
+      exhausted: 'No quedan candidatos nuevos con estos filtros. Cambia el texto o la longitud.',
+      cancelled: 'Búsqueda detenida.',
+      invalid: 'Nombre no válido para este tipo de consulta.',
+    };
+    session.notice = statuses[result.status] ?? 'Consulta terminada sin resultado verificable.';
+    if (session.exactName && result.status === 'complete') {
+      const label = { taken: 'Ocupado', available: 'Disponible al comprobarlo', unlinked: 'Sin invitación activa (asignación no garantizada)' }[result.last.status];
+      session.notice = `\`${session.exactName}\`: ${label} · comprobado <t:${Math.floor(result.last.checkedAt / 1000)}:R>.`;
+    }
+    session.running = false;
+    if (!session.cancelled) await publish();
+  } catch {
+    session.cancelled = true;
+  } finally { session.running = false; }
 }
 
 function input(id, label, placeholder, value = '') {
@@ -117,13 +167,20 @@ async function handleComponent(interaction) {
     await privateReply('Este panel pertenece a quien lo abrió. Usa `xyb lookup` para abrir el tuyo.');
     return true;
   }
+  if (session.running && !['close', 'prev', 'next'].includes(action)) {
+    await privateReply('Espera a que termine esta tanda, o ciérrala con ⛔.');
+    return true;
+  }
   if (interaction.isButton?.()) {
     if (action === 'search' || action === 'filter') {
       await interaction.showModal(modal(session, action));
       return true;
     }
     if (action === 'close') {
-      await interaction.update(panel(session, { closed: true }));
+      session.cancelled = true;
+      await interaction.deferUpdate();
+      await session.edits?.catch(() => {});
+      await interaction.editReply(panel(session, { closed: true }));
       sessions.delete(token);
       return true;
     }
@@ -135,7 +192,12 @@ async function handleComponent(interaction) {
       await privateReply('Busca con letras, números, puntos, guiones o guiones bajos (máximo 32 caracteres).');
       return true;
     }
+    if (!validFilters({ ...session, query })) {
+      await privateReply('El texto no cabe en la longitud elegida o usa caracteres incompatibles. Cambia ⚙️ primero.');
+      return true;
+    }
     session.query = query;
+    session.exactName = null;
     session.page = 0;
   } else if (action === 'filter-submit') {
     const type = interaction.fields.getTextInputValue('type').trim().toLowerCase();
@@ -147,24 +209,25 @@ async function handleComponent(interaction) {
       await privateReply('Lista: `nombres` o `vanities`. Longitud: 2 a 32 o vacío. Caracteres: `todos`, `letras`, `numeros` o `simples`.');
       return true;
     }
-    session.type = type.startsWith('vanit') ? 'vanities' : 'usernames';
-    session.length = lengthText ? Number(lengthText) : null;
-    session.mode = mode;
+    const filters = { type: type.startsWith('vanit') ? 'vanities' : 'usernames', length: lengthText ? Number(lengthText) : null, mode, query: session.query };
+    if (!validFilters(filters)) filters.query = '';
+    Object.assign(session, filters, { exactName: null });
     session.page = 0;
   } else return true;
   // Los modales nacen de un botón de este mensaje: update mantiene un panel.
   await interaction.update(panel(session));
+  if (action.endsWith('-submit')) await runSearch(session, (payload) => interaction.editReply(payload));
   return true;
 }
 
 module.exports = {
   name: 'lookup',
-  description: 'Busca nombres y vanities abandonados que XYB haya detectado.',
-  usage: 'xyb lookup [vanity] [longitud 2-32] [texto]',
+  description: 'Comprueba candidatos de nombres globales y enlaces vanity.',
+  usage: 'xyb lookup [vanity] [2-32/todos] [texto] | xyb lookup [vanity] check nombre',
   guildOnly: true,
   resolveMember: false,
   slash: {
-    description: 'Busca nombres y vanities abandonados detectados por XYB.',
+    description: 'Comprueba nombres globales y enlaces vanity por longitud.',
     setup(builder) {
       return builder
         .addStringOption((option) => option.setName('tipo').setDescription('Lista que quieres ver')
@@ -181,12 +244,17 @@ module.exports = {
       const query = interaction.options.getString('texto') ?? '';
       filters = parseArgs([type, ...(length ? [String(length)] : [])]);
       filters.query = query.trim().toLowerCase();
-      if (filters.query && !/^[a-z0-9_.-]{1,32}$/.test(filters.query)) filters.error = USAGE;
+      if (!length && filters.query.length > 3) filters.length = filters.query.length;
+      if (!validFilters(filters)) filters.error = USAGE;
     } else filters = parseArgs(args);
     if (filters.error) return fail(filters.error);
     const session = createSession(user, guild.id, filters);
-    try { await reply(panel(session)); } catch (error) { sessions.delete(session.token); throw error; }
+    try {
+      session.running = true;
+      const message = await reply(panel(session));
+      await runSearch(session, (payload) => isSlash ? interaction.editReply(payload) : message.edit(payload));
+    } catch (error) { sessions.delete(session.token); throw error; }
   },
   handleComponent,
-  __test: { parseArgs, createSession, panel, modal, sessions, SESSION_MS },
+  __test: { parseArgs, createSession, panel, modal, sessions, SESSION_MS, runSearch, validFilters },
 };

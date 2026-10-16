@@ -14,7 +14,7 @@ Base inicial del bot privado de Discord.
 - Limpieza: `xyb purge 1-1000` o `xyb c 1-1000` para moderadores; `xyb purge bots` o `xyb c bots [1-1000]` borra solo mensajes de bots; `xyb pg` o `xyb apg` limpia los mensajes propios.
 - Antispam: silencia automáticamente por una hora tras 8 mensajes consecutivos iguales en menos de 5 minutos.
 - `xyb avatar`, `xyb banner`, `xyb ping`, `xyb botinfo`: ficha, avatar, banner, latencia y estado del bot.
-- `.lookup 3`, `!lookup 4`, `xyb lookup 5` o `/lookup`: nombres abandonados detectados por XYB, con avatar, fechas, páginas, búsqueda y filtros. También acepta `lookup vanity 6`.
+- `.lookup 3`, `!lookup 4`, `xyb lookup 5` o `/lookup`: comprobación global de candidatos, con avatar, fecha de consulta, páginas y filtros. También acepta `lookup vanity 6`.
 - `xyb snipe [n]`: recupera hasta 10 mensajes borrados del canal, con quién los borró.
 - `xyb prefix add !` / `remove` / `set`: agrega prefijos extra (hasta 5). `xyb` nunca se puede quitar.
 - `xyb welcome`: panel con botones para configurar la bienvenida (canal, mensaje, título, footer, color, imagen, thumbnail, mención y embed). `xyb welcomevars` lista las variables y `xyb welcometest` la prueba.
@@ -22,7 +22,7 @@ Base inicial del bot privado de Discord.
 
 ## Preparación
 
-1. Instala Node.js 18 o superior.
+1. Instala Node.js 24 LTS (incluye soporte para la biblioteca de voz actual).
 2. En esta carpeta, ejecuta `npm install`.
 3. Copia `.env.example` como `.env` y completa `DISCORD_TOKEN`, `CLIENT_ID` y, para pruebas rápidas, `GUILD_ID`.
 4. En el portal de desarrolladores de Discord, activa los intents **Message Content** y **Server Members**. Luego pon `MEMBERS_INTENT=true` en `.env`: es necesario para usar nombres o apodos sin mencionar a la persona (por ejemplo, `xyb kiss csr`).
@@ -44,7 +44,7 @@ Viven en `src/commands/`, se cargan solos al arrancar y también se registran co
 | `xyb ping` (`ms`, `latencia`) | Latencia de mensaje y de gateway. |
 | `xyb botinfo` (`info`, `stats`) | Uptime, memoria, servidores, versión. |
 | `xyb snipe` (`s`, `recuperar`) | Últimos mensajes borrados del canal. |
-| `xyb lookup [vanity] [2-32] [texto]` | Nombres y vanities abandonados detectados por XYB. |
+| `xyb lookup [vanity] [2-32/todos] [texto]` | Comprueba candidatos globales de nombres y enlaces vanity. |
 | `xyb prefix` (`prefijos`) | Agrega o quita prefijos del servidor. |
 | `xyb welcome` (`wlc`) | Panel de bienvenida. |
 | `xyb welcomevars` | Variables disponibles: `{{user}}`, `{{username}}`, `{{tag}}`, `{{id}}`, `{{server}}`, `{{members}}`, `{{count}}`. |
@@ -92,16 +92,28 @@ Cuando alguien use `xyb kiss @usuario` o `/kiss`, el bot publica un embed con bo
 
 Los contadores de besos se guardan en `data/kiss-counts.json`; en Railway, ese directorio debe estar en un volumen persistente si se quieren conservar tras un despliegue. Si alguna imagen deja de funcionar, `npm run check:images` dice cuál y basta con cambiarla en `src/index.js`.
 
+El contador es compartido por pareja y servidor: A besa a B = 1; B corresponde = 2; B besa a A = 3; A corresponde = 4. Los antiguos contadores separados por dirección se suman automáticamente sin reiniciarse. Un rechazo no suma ni borra el total. Solo se permite una respuesta por beso; el botón caduca a las 24 horas. Se guarda en memoria con escritura agrupada para evitar leer y reescribir el archivo en cada interacción.
+
+## Perfil social
+
+`xyb profile`, `xyb perfil`, `xyb profile @persona` y `/profile` muestran avatar, frase, profesión personal, nivel, ranking del servidor, besos compartidos y matrimonio. El selector permite editar tu propia frase y profesión. Los besos compartidos incluyen ambos sentidos; no son un conteo separado de enviados y recibidos.
+
+El progreso empieza con la actividad que registra XYB desde esta actualización: 15 XP por mensaje, como máximo una vez por minuto. Bots y mensajes bloqueados por antispam no ganan XP. Nivel = parte entera de √(XP/100); ranking entre perfiles registrados en ese servidor. La fecha de registro corresponde a XYB, no a la creación de la cuenta de Discord. No se importan monedas, inventarios o estadísticas de otros bots. Datos en `data/profiles.json` (o `XYB_DATA_DIR`).
+
+Para reducir esperas, las menciones y comandos sin argumentos no buscan miembros por la red. Las búsquedas por nombre usan REST cuando está disponible; las imágenes de besos se almacenan en caché de memoria de hasta 32 MiB, con límite de descarga de 1,5 segundos y enlace directo si el proveedor tarda. Los botones de besos confirman la interacción antes de preparar la imagen. La latencia de la red/Discord sigue siendo externa al bot.
+
 ## Antispam automático
 
 El owner del servidor queda excluido. Para cualquier otra persona, si envía 8 mensajes iguales consecutivos en una ventana de 5 minutos, XYB la silencia automáticamente durante una hora. El bot necesita **Moderar miembros** y un rol superior al de esa persona para poder hacerlo.
 
 ## Nombres y vanities: lookup
 
-Ejemplos: `.lookup 3`, `.lookup 4`, `.lookup 5`, `.lookup 6`, `.lookup vanity 4` y `.lookup 5 ab`. También funcionan `!lookup`, `xyb lookup` y `/lookup` con opciones de tipo, longitud y texto. La longitud admite de 2 a 32 caracteres; sin número muestra todas. Los cinco botones permiten retroceder, avanzar, buscar, cerrar el panel y filtrar por letras, números o nombres sin símbolos. El panel dura 15 minutos y lo maneja quien lo abrió.
+Ejemplos: `.lookup 3`, `.lookup 4`, `.lookup 5`, `.lookup 6`, `.lookup todos`, `.lookup vanity 4` y `.lookup 5 ab`. También funcionan `!lookup`, `xyb lookup` y `/lookup` con opciones de tipo, longitud y texto. La longitud admite de 2 a 32 caracteres; sin número busca 3. `todos` genera distintas longitudes. `.lookup check nombre` y `.lookup vanity check codigo` comprueban un candidato concreto. No cambian tu nombre ni reclaman URLs.
 
-XYB registra cambios reales de **nombre de usuario** recibidos por Discord (no apodos ni nombres visibles). La primera observación de una persona solo fija su nombre actual. Las fechas indican cuándo se detectó el cambio. La lista de usernames es del servidor donde se consulta; la de vanities reúne cambios de URLs personalizadas de los servidores donde está XYB. Si vuelve a detectar un nombre o vanity en uso, lo retira de la lista.
+El buscador genera hasta 12 candidatos por tanda y comprueba cada uno globalmente, no solo en tu servidor. Los cinco botones permiten retroceder, avanzar, buscar otra tanda (con texto opcional), cerrar y filtrar. Incluye letras, números y símbolos admitidos: `_.` para usernames, `-` para candidatos vanity. También permite solo letras, solo números o alfanuméricos. El panel dura 15 minutos y lo maneja quien lo abrió. Cerrar detiene la tanda después de la petición en curso.
 
-El catálogo empieza vacío y crece con los cambios recibidos desde su activación. No importa la base de Greed, no reconstruye cambios anteriores y **no confirma que los nombres estén disponibles para registrarlos**. Para usernames, habilita Server Members Intent en el portal y `MEMBERS_INTENT=true` en `.env`; el bot carga una referencia inicial y después usa los eventos. Fuente de estos eventos: [Discord Gateway Events](https://docs.discord.com/developers/events/gateway-events#guild-member-update).
+**No es un registro completo de Discord ni una copia del historial de Greed.** Las fechas son de comprobación, nunca fechas de abandono. Los nombres de tres caracteres son escasos: una tanda puede no encontrar ninguno. Los usernames se incluyen solo cuando la consulta responde `taken: false`; pueden ocuparse después y Discord aún puede rechazar su asignación. Para vanities, `Unknown Invite` solo indica que no hay una invitación activa: NO confirma que la URL pueda asignarse. Las invitaciones existentes tampoco se identifican necesariamente como vanities.
 
-Se conserva en `data/username-lookup.json` con caché y escritura atómica agrupada, usando el almacén existente del bot. Conserva hasta 10 000 nombres abandonados por servidor y 10 000 vanities. Mantén `data/` en almacenamiento persistente al desplegar. No se envían mensajes de historial automáticamente a los canales.
+Implementación: consulta pública anónima de usernames `POST /api/v9/unique-username/username-attempt-unauthed` y consulta de invitaciones `GET /api/v10/invites/{code}`. La primera no pertenece a la API documentada de bots y puede dejar de funcionar. No usa tokens de usuarios, cookies, selfbots, proxies ni evasión de CAPTCHA. No requiere Server Members Intent para lookup. Solo hay una tanda global a la vez, con al menos seis segundos entre consultas. Ante 429 respeta la espera indicada; ante restricciones/CAPTCHA detiene las consultas. Nunca interpreta un error como disponibilidad.
+
+La caché se conserva en `data/lookup-cache.json`, hasta 25 000 comprobaciones; los resultados libres/sin invitación caducan a los 15 minutos y los ocupados a la hora. Mantén `data/` en almacenamiento persistente al desplegar. Cada nueva tanda se solicita manualmente; no hay barridos ilimitados en segundo plano. Después de actualizar archivos, reinicia una sola copia del bot con `npm start`; para publicar o actualizar `/lookup`, usa `npm run register`.

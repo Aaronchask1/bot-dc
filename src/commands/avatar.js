@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 
 module.exports = {
   name: 'avatar',
+  resolveMember: true,
   aliases: ['av', 'pfp', 'foto'],
   description: 'Muestra el avatar de alguien en grande.',
   usage: 'xyb avatar [persona]',

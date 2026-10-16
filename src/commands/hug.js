@@ -3,6 +3,7 @@ const hugs = require('../lib/hugs');
 
 module.exports = {
   name: 'hug',
+  resolveMember: true,
   aliases: ['abrazo', 'abraza'],
   description: 'Le manda un abrazo.',
   usage: 'xyb hug [persona]',

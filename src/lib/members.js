@@ -40,11 +40,26 @@ function resolveMember(guild, query) {
  * cuando el caché no encontró a nadie.
  */
 async function resolveMemberAsync(guild, query) {
+  const wanted = String(query ?? '').trim();
+  if (!wanted) return { member: null, reason: 'not_found' };
+  const id = wanted.match(/^(?:<@!?)?(\d{17,20})>?$/)?.[1];
+  if (id) {
+    const cachedId = guild?.members?.cache?.get(id);
+    if (cachedId) return { member: cachedId, reason: null };
+    try {
+      const member = await guild.members.fetch(id);
+      return { member, reason: member ? null : 'not_found' };
+    } catch { return { member: null, reason: 'not_found' }; }
+  }
   const cached = resolveMember(guild, query);
   if (cached.member || cached.reason === 'ambiguous' || typeof guild?.members?.fetch !== 'function') return cached;
 
   try {
-    const fetched = await guild.members.fetch({ query: String(query).trim(), limit: 10 });
+    // search usa REST. fetch({query}) pide un chunk al gateway y podía
+    // bloquear el comando hasta el timeout de 120 segundos.
+    const fetched = typeof guild.members.search === 'function'
+      ? await guild.members.search({ query: wanted, limit: 10 })
+      : await guild.members.fetch({ query: wanted, limit: 10, time: 2500 });
     if (!fetched?.values) return cached;
     return resolveFromList(fetched.values(), query);
   } catch {
