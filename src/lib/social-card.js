@@ -31,11 +31,31 @@ function circle(ctx, image, x, y, color) {
   else { ctx.fillStyle = color; ctx.fillRect(x - 72, y - 72, 144, 144); }
   ctx.restore(); ctx.lineWidth = 5; ctx.strokeStyle = '#fff4fa'; ctx.beginPath(); ctx.arc(x, y, 74, 0, Math.PI * 2); ctx.stroke();
 }
+function heart(ctx, x, y, size, color) {
+  const s = size / 32;
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.beginPath();
+  ctx.moveTo(0, 11); ctx.bezierCurveTo(-24, -4, -16, -25, 0, -10);
+  ctx.bezierCurveTo(16, -25, 24, -4, 0, 11); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill(); ctx.restore();
+}
+function shipBackground(ctx) {
+  const backdrop = ctx.createLinearGradient(0, 0, 800, 300);
+  backdrop.addColorStop(0, '#28112d'); backdrop.addColorStop(0.48, '#7a294f'); backdrop.addColorStop(1, '#25122d');
+  ctx.fillStyle = backdrop; ctx.fillRect(0, 0, 800, 300);
+  heart(ctx, 88, 60, 42, '#ff9dbe33'); heart(ctx, 705, 60, 28, '#ffc1d533');
+  heart(ctx, 52, 238, 24, '#ffffff20'); heart(ctx, 751, 241, 40, '#ffffff18');
+  heart(ctx, 400, 160, 230, '#ff7aa81f');
+  ctx.fillStyle = '#160d1dcc'; ctx.fillRect(270, 50, 260, 170);
+  ctx.strokeStyle = '#ffb5cf66'; ctx.lineWidth = 2; ctx.strokeRect(270, 50, 260, 170);
+}
 function trim(value, max = 28) { const text = String(value ?? 'Usuario'); return text.length > max ? `${text.slice(0, max - 1)}…` : text; }
-async function card({ left, right, title, subtitle, badge = '💗', color = '#f48fb1', file = 'xyb-card.png' }) {
+async function card({ left, right, title, subtitle, badge = '💗', color = '#f48fb1', file = 'xyb-card.png', variant = 'social' }) {
   const canvas = createCanvas(800, 300); const ctx = canvas.getContext('2d');
-  const gradient = ctx.createLinearGradient(0, 0, 800, 300); gradient.addColorStop(0, '#211827'); gradient.addColorStop(0.5, '#493143'); gradient.addColorStop(1, '#211827'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 800, 300);
-  ctx.fillStyle = `${color}33`; ctx.beginPath(); ctx.arc(400, 150, 145, 0, Math.PI * 2); ctx.fill();
+  if (variant === 'ship') shipBackground(ctx);
+  else {
+    const gradient = ctx.createLinearGradient(0, 0, 800, 300); gradient.addColorStop(0, '#211827'); gradient.addColorStop(0.5, '#493143'); gradient.addColorStop(1, '#211827'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 800, 300);
+    ctx.fillStyle = `${color}33`; ctx.beginPath(); ctx.arc(400, 150, 145, 0, Math.PI * 2); ctx.fill();
+  }
   const [leftAvatar, rightAvatar] = await Promise.all([avatar(left), avatar(right)]);
   circle(ctx, leftAvatar, 145, 152, '#f48fb1'); circle(ctx, rightAvatar, 655, 152, '#a7d8ff');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff7fb'; ctx.font = '700 30px "XYB Roboto"'; ctx.fillText(badge, 400, 78);

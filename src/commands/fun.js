@@ -48,7 +48,7 @@ module.exports = {
       if (people.length !== 2) return reply('Uso: `xyb ship @persona`. También puedes mencionar a dos personas para compararlas entre sí.');
       const result = shipResult(people[0], people[1]);
       if (isSlash) await defer();
-      const payload = await socialCard.card({ left: people[0], right: people[1], title: `${result.percent}%`, subtitle: `${result.name} · Compatibilidad`, badge: '♥', color: '#ff7aa8', file: 'ship.png' });
+      const payload = await socialCard.card({ left: people[0], right: people[1], title: `${result.percent}%`, subtitle: `${result.name} · Compatibilidad`, badge: '♥', color: '#ff7aa8', file: 'ship.png', variant: 'ship' });
       payload.content = `💗 | El nombre del ship es **${result.name}**\n❤️ | La compatibilidad es **${result.percent}%**\n\n${result.phrase}`;
       return reply(payload);
     }
