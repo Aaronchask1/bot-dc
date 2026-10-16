@@ -19,7 +19,6 @@ const HUG_IMAGES = [
   'https://betteranime.files.wordpress.com/2015/06/0191.png?h=576&w=1024',
   'https://image.idntimes.com/post/20230313/vlcsnap-2023-03-13-19h05m47s024-3b221a05a8f4eb1fcd1879ca12e22200-bf5d3c46eb91cdadaa3c4e572c890d31.png',
 ];
-animeMedia.warm({ hug: HUG_IMAGES });
 
 function randomImage() {
   return animeMedia.pick('hug', HUG_IMAGES);
@@ -58,7 +57,7 @@ async function handleComponent(interaction) {
   const [from, to] = await Promise.all([
     interaction.client.users.fetch(fromId), interaction.client.users.fetch(toId),
   ]);
-  await interaction.reply(await socialCard.card({ left: to, right: from, title: 'ABRAZO DEVUELTO', subtitle: `${to.username} le devuelve el abrazo a ${from.username}`, badge: '🫂', color: '#9ad9a0', file: 'hug-back.png', backgroundUrl: randomImage() }));
+  await interaction.reply(await socialCard.card({ left: to, right: from, title: 'ABRAZO DEVUELTO', subtitle: `${to.username} le devuelve el abrazo a ${from.username}`, badge: '🫂', color: '#9ad9a0', file: 'hug-back.png' }));
   try {
     await interaction.message.edit({ components: [] });
   } catch { /* si el mensaje ya no está, no es problema */ }

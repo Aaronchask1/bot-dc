@@ -86,13 +86,6 @@ const KISS_REJECT_IMAGES = [
   'https://media.tenor.com/PYOMyiz9VckAAAAM/sad-anime-boy-crying.gif',
 ];
 
-// Keep 60 rotating SFW images ready for every kiss result. The short lists
-// above are only the instant fallback while the persistent pool fills.
-animeMedia.warm({
-  kiss: KISS_IMAGES,
-  kiss_return: KISS_GIFT_IMAGES,
-  kiss_reject: KISS_REJECT_IMAGES,
-});
 
 const client = new Client({
   intents: [
@@ -538,6 +531,14 @@ client.once(Events.ClientReady, async (readyClient) => {
     logger.warn('No pude actualizar la presencia', error);
   }
   logger.info(`Conectado como ${readyClient.user.tag} en ${readyClient.guilds.cache.size} servidor(es). PID ${process.pid}.`);
+  // Once Discord is online, fill the persistent 60-image pools in the
+  // background. Keeping this out of module loading prevents test/startup
+  // work from being blocked by an image provider.
+  animeMedia.warm({
+    kiss: KISS_IMAGES, kiss_return: KISS_GIFT_IMAGES, kiss_reject: KISS_REJECT_IMAGES,
+    hug: hugs.HUG_IMAGES, proposal: marriageProps.PROPOSE_IMAGES,
+    marriage_accept: marriageProps.ACCEPT_IMAGES, marriage_reject: marriageProps.REJECT_IMAGES,
+  });
   reminders.start(readyClient);
 
   if (process.env.MEMBERS_INTENT !== 'true') {

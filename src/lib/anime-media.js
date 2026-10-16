@@ -47,7 +47,6 @@ async function refill(kind, fallback = []) {
 }
 function pick(kind, fallback = []) {
   const values = pool(kind, fallback);
-  if (values.length < TARGET) void refill(kind, fallback);
   return values[Math.floor(Math.random() * values.length)] ?? fallback[0] ?? null;
 }
 function warm(entries) { for (const [kind, fallback] of Object.entries(entries)) void refill(kind, fallback); }
