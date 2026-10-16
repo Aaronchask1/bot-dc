@@ -1,5 +1,6 @@
 const marriage = require('../lib/marriage');
 const props = require('../lib/marriage-props');
+const { prepareKissPayload } = require('../lib/kiss-media');
 
 module.exports = {
   name: 'marry',
@@ -37,9 +38,8 @@ module.exports = {
     }
 
     // Todavía no se casan: aquí solo va la propuesta con sus botones.
-    await reply({
-      embeds: [props.proposalEmbed(user, person)],
-      components: [props.buttons(user.id, person.id)],
-    });
+    const payload = await prepareKissPayload(props.proposalPayload(user, person));
+    payload.components = [props.buttons(user.id, person.id)];
+    await reply(payload);
   },
 };

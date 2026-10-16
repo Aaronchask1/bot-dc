@@ -6,6 +6,8 @@ const {
   MessageFlags,
 } = require('discord.js');
 const marriage = require('./marriage');
+const animeMedia = require('./anime-media');
+const { prepareKissPayload } = require('./kiss-media');
 
 // Los matrimonios ya no se guardan al escribir el comando: se guardan cuando la
 // otra persona pulsa "Aceptar". El id viaja en el botón, así que no hace falta
@@ -35,38 +37,65 @@ const REJECT_IMAGES = [
   'https://media1.tenor.com/m/0aSY5qsa0MgAAAAd/anime-no.gif',
 ];
 
-function pick(images) {
-  return images[Math.floor(Math.random() * images.length)];
+animeMedia.warm({
+  proposal: PROPOSE_IMAGES,
+  marriage_accept: ACCEPT_IMAGES,
+  marriage_reject: REJECT_IMAGES,
+});
+
+function pick(images, pool) {
+  return animeMedia.pick(pool, images);
 }
 
-function proposalEmbed(from, to) {
+function proposalEmbed(from, to, image = pick(PROPOSE_IMAGES, 'proposal')) {
   return new EmbedBuilder()
     .setColor(0xFFB6C1)
     .setTitle('💍 ¡Propuesta de matrimonio!')
     .setDescription(`${from} le está pidiendo la mano a ${to}.`)
-    .setImage(pick(PROPOSE_IMAGES))
+    .setImage(image)
     .setFooter({ text: 'Solo la persona mencionada puede responder · 🐰 xyb' });
 }
 
-function acceptedEmbed(from, to, since) {
+function acceptedEmbed(from, to, since, image = pick(ACCEPT_IMAGES, 'marriage_accept')) {
   return new EmbedBuilder()
     .setColor(0x2ECC71)
     .setTitle('💍 ¡Se casaron!')
     .setDescription(`${to} aceptó. ${from} y ${to} ahora son marido y Mujer.`)
     .addFields({ name: '💞 Desde', value: `<t:${Math.floor(since / 1000)}:D>`, inline: true })
-    .setImage(pick(ACCEPT_IMAGES))
+    .setImage(image)
     .setFooter({ text: '🐰 xyb' })
     .setTimestamp();
 }
 
-function rejectedEmbed(from, to) {
+function rejectedEmbed(from, to, image = pick(REJECT_IMAGES, 'marriage_reject')) {
   return new EmbedBuilder()
     .setColor(0xED4245)
     .setTitle('💔 Rechazado')
     .setDescription(`${to} le dijo que no a ${from}.`)
-    .setImage(pick(REJECT_IMAGES))
+    .setImage(image)
     .setFooter({ text: 'Hay otros 🤷 · 🐰 xyb' })
     .setTimestamp();
+}
+
+function fileName(kind, image) {
+  const extension = new URL(image).pathname.match(/\.(gif|png|jpe?g|webp)$/i)?.[1] ?? 'gif';
+  return `xyb-${kind}.${extension}`;
+}
+function attached(embed, kind, image) {
+  const name = fileName(kind, image);
+  return { embeds: [embed.setImage(`attachment://${name}`)], files: [{ attachment: image, name }] };
+}
+function proposalPayload(from, to) {
+  const image = pick(PROPOSE_IMAGES, 'proposal');
+  return attached(proposalEmbed(from, to, image), 'proposal', image);
+}
+function acceptedPayload(from, to, since) {
+  const image = pick(ACCEPT_IMAGES, 'marriage_accept');
+  return attached(acceptedEmbed(from, to, since, image), 'married', image);
+}
+function rejectedPayload(from, to) {
+  const image = pick(REJECT_IMAGES, 'marriage_reject');
+  return attached(rejectedEmbed(from, to, image), 'marriage-reject', image);
 }
 
 function buttons(fromId, toId) {
@@ -95,7 +124,7 @@ async function handleComponent(interaction) {
   }
 
   if (answer === 'no') {
-    await interaction.reply({ embeds: [rejectedEmbed(`<@${fromId}>`, `<@${toId}>`)] });
+    await interaction.reply(await prepareKissPayload(rejectedPayload(`<@${fromId}>`, `<@${toId}>`)));
     await clearButtons(interaction);
     return true;
   }
@@ -107,7 +136,7 @@ async function handleComponent(interaction) {
     return true;
   }
 
-  await interaction.reply({ embeds: [acceptedEmbed(`<@${fromId}>`, `<@${toId}>`, result.since)] });
+  await interaction.reply(await prepareKissPayload(acceptedPayload(`<@${fromId}>`, `<@${toId}>`, result.since)));
   await clearButtons(interaction);
   return true;
 }
@@ -126,5 +155,8 @@ module.exports = {
   buttons,
   handleComponent,
   proposalEmbed,
+  proposalPayload,
+  acceptedPayload,
+  rejectedPayload,
   rejectedEmbed,
 };

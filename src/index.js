@@ -34,6 +34,7 @@ const profiles = require('./lib/profiles');
 const profileCommand = require('./commands/profile');
 const tradeCommand = require('./commands/trade');
 const { prepareKissPayload } = require('./lib/kiss-media');
+const animeMedia = require('./lib/anime-media');
 const afk = require('./lib/afk');
 const reminders = require('./lib/reminders');
 const polls = require('./lib/polls');
@@ -84,6 +85,14 @@ const KISS_REJECT_IMAGES = [
   'https://media.tenor.com/kddUkOv5fC4AAAAM/anime-embarrassment.gif',
   'https://media.tenor.com/PYOMyiz9VckAAAAM/sad-anime-boy-crying.gif',
 ];
+
+// Keep 60 rotating SFW images ready for every kiss result. The short lists
+// above are only the instant fallback while the persistent pool fills.
+animeMedia.warm({
+  kiss: KISS_IMAGES,
+  kiss_return: KISS_GIFT_IMAGES,
+  kiss_reject: KISS_REJECT_IMAGES,
+});
 
 const client = new Client({
   intents: [
@@ -344,19 +353,19 @@ async function handlePrefixModeration(message) {
 
 const addKiss = kisses.add;
 
-function randomKissImage(images) {
-  return images[Math.floor(Math.random() * images.length)];
+function randomKissImage(kind, images) {
+  return animeMedia.pick(kind, images);
 }
 
 const KISS_STYLES = {
-  send: { color: 0xFF6B9A, images: KISS_IMAGES },
-  gift: { color: 0xFFC2DA, images: KISS_GIFT_IMAGES },
-  reject: { color: 0xED4245, images: KISS_REJECT_IMAGES },
+  send: { color: 0xFF6B9A, images: KISS_IMAGES, pool: 'kiss' },
+  gift: { color: 0xFFC2DA, images: KISS_GIFT_IMAGES, pool: 'kiss_return' },
+  reject: { color: 0xED4245, images: KISS_REJECT_IMAGES, pool: 'kiss_reject' },
 };
 
 function kissPayload(from, to, count, mode = 'send') {
   const style = KISS_STYLES[mode] ?? KISS_STYLES.send;
-  const image = randomKissImage(style.images);
+  const image = randomKissImage(style.pool, style.images);
   const pathname = new URL(image).pathname;
   const extension = pathname.match(/\.(gif|png|jpe?g|webp)$/i)?.[1] ?? 'gif';
   const filename = `xyb-${mode}.${extension}`;

@@ -14,7 +14,10 @@ function avatarUrl(person) {
     ?? 'https://cdn.discordapp.com/embed/avatars/0.png';
 }
 async function avatar(person) {
-  const url = avatarUrl(person); const cached = avatars.get(url);
+  return remoteImage(avatarUrl(person));
+}
+async function remoteImage(url) {
+  const cached = avatars.get(url);
   if (cached && cached.until > Date.now()) return cached.image;
   try {
     const image = await Promise.race([
@@ -49,14 +52,19 @@ function shipBackground(ctx) {
   ctx.strokeStyle = '#ffb5cf66'; ctx.lineWidth = 2; ctx.strokeRect(270, 50, 260, 170);
 }
 function trim(value, max = 28) { const text = String(value ?? 'Usuario'); return text.length > max ? `${text.slice(0, max - 1)}…` : text; }
-async function card({ left, right, title, subtitle, badge = '💗', color = '#f48fb1', file = 'xyb-card.png', variant = 'social' }) {
+async function card({ left, right, title, subtitle, badge = '💗', color = '#f48fb1', file = 'xyb-card.png', variant = 'social', backgroundUrl = null }) {
   const canvas = createCanvas(800, 300); const ctx = canvas.getContext('2d');
-  if (variant === 'ship') shipBackground(ctx);
+  const [leftAvatar, rightAvatar, background] = await Promise.all([avatar(left), avatar(right), backgroundUrl ? remoteImage(backgroundUrl) : null]);
+  if (background) {
+    const scale = Math.max(800 / background.width, 300 / background.height);
+    const width = background.width * scale; const height = background.height * scale;
+    ctx.drawImage(background, (800 - width) / 2, (300 - height) / 2, width, height);
+    ctx.fillStyle = '#1a1020a8'; ctx.fillRect(0, 0, 800, 300);
+  } else if (variant === 'ship') shipBackground(ctx);
   else {
     const gradient = ctx.createLinearGradient(0, 0, 800, 300); gradient.addColorStop(0, '#211827'); gradient.addColorStop(0.5, '#493143'); gradient.addColorStop(1, '#211827'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 800, 300);
     ctx.fillStyle = `${color}33`; ctx.beginPath(); ctx.arc(400, 150, 145, 0, Math.PI * 2); ctx.fill();
   }
-  const [leftAvatar, rightAvatar] = await Promise.all([avatar(left), avatar(right)]);
   circle(ctx, leftAvatar, 145, 152, '#f48fb1'); circle(ctx, rightAvatar, 655, 152, '#a7d8ff');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff7fb'; ctx.font = '700 30px "XYB Roboto"'; ctx.fillText(badge, 400, 78);
   ctx.font = '700 48px "XYB Roboto"'; ctx.fillStyle = color; ctx.fillText(trim(title, 26), 400, 145);

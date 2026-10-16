@@ -29,7 +29,7 @@ module.exports = {
     }
 
     if (isSlash) await defer();
-    const payload = await socialCard.card({ left: user, right: person, title: 'ABRAZO', subtitle: `${user.username} abraza a ${person.username}`, badge: '🫂', color: '#9ad9a0', file: 'hug.png' });
+    const payload = await socialCard.card({ left: user, right: person, title: 'ABRAZO', subtitle: `${user.username} abraza a ${person.username}`, badge: '🫂', color: '#9ad9a0', file: 'hug.png', backgroundUrl: hugs.randomImage() });
     payload.components = [hugs.backButton(user.id, person.id)];
     await reply(payload);
   },
