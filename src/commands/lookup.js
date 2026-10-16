@@ -5,6 +5,7 @@ const {
   TextDisplayBuilder, TextInputBuilder, TextInputStyle, ThumbnailBuilder,
 } = require('discord.js');
 const history = require('../lib/username-lookup');
+const logger = require('../logger');
 
 const sessions = new Map();
 const SESSION_MS = 15 * 60_000;
@@ -124,8 +125,14 @@ async function runSearch(session, edit, service = history) {
     }
     session.running = false;
     if (!session.cancelled) await publish();
-  } catch {
-    session.cancelled = true;
+  } catch (error) {
+    // Nunca dejamos el panel atrapado en “Consultando 1/12” si Discord o una
+    // edición del mensaje falla. El usuario debe poder reintentar o cambiar
+    // filtros sin tener que mandar otro comando.
+    logger.warn('Lookup detenido antes de terminar', error);
+    session.notice = 'No se pudo completar esta tanda. Discord puede haber limitado la consulta; espera un momento y pulsa 🔎 para reintentar.';
+    session.running = false;
+    if (!session.cancelled) await publish().catch(() => {});
   } finally { session.running = false; }
 }
 
