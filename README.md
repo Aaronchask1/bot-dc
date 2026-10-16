@@ -19,6 +19,7 @@ Base inicial del bot privado de Discord.
 - `xyb prefix add !` / `remove` / `set`: agrega prefijos extra (hasta 5). `xyb` nunca se puede quitar.
 - `xyb welcome`: panel con botones para configurar la bienvenida (canal, mensaje, título, footer, color, imagen, thumbnail, mención y embed). `xyb welcomevars` lista las variables y `xyb welcometest` la prueba.
 - `xyb steal`: crea un sticker en el servidor a partir de un emoji o de un PNG/APNG/Lottie.
+- Comunidad: `xyb afk`, `xyb remind`, `xyb poll`, `xyb suggest`, `xyb act` y utilidades `xyb 8ball`, `xyb choose`, `xyb coinflip` y `xyb ship`.
 
 ## Preparación
 

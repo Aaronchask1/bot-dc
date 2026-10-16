@@ -28,6 +28,9 @@ const kisses = require('./lib/kisses');
 const profiles = require('./lib/profiles');
 const profileCommand = require('./commands/profile');
 const { prepareKissPayload } = require('./lib/kiss-media');
+const afk = require('./lib/afk');
+const reminders = require('./lib/reminders');
+const polls = require('./lib/polls');
 const logger = require('./logger');
 
 const PREFIX = 'xyb';
@@ -90,6 +93,7 @@ const client = new Client({
 const HELP_CATEGORIES = [
   { id: 'social', label: '💞 Social', description: 'Besos, abrazos y matrimonio.' },
   { id: 'perfil', label: '🪪 Perfil y utilidad', description: 'Perfiles, datos y herramientas.' },
+  { id: 'comunidad', label: '🎉 Comunidad', description: 'AFK, encuestas, recordatorios y sugerencias.' },
   { id: 'servidor', label: '⚙️ Servidor', description: 'Bienvenida, prefijos, roles y voz.' },
   { id: 'moderacion', label: '🛡️ Moderación', description: 'Limpieza y acciones de moderación.' },
 ];
@@ -112,6 +116,7 @@ const CORE_HELP_COMMANDS = [
 const EXTRA_COMMAND_CATEGORIES = {
   hug: 'social', marry: 'social', wife: 'social', divorce: 'social',
   avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil',
+  afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad', fun: 'comunidad', act: 'social',
   prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
   purge: 'moderacion', rol: 'moderacion', steal: 'moderacion',
 };
@@ -516,6 +521,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     logger.warn('No pude actualizar la presencia', error);
   }
   logger.info(`Conectado como ${readyClient.user.tag} en ${readyClient.guilds.cache.size} servidor(es). PID ${process.pid}.`);
+  reminders.start(readyClient);
 
   if (process.env.MEMBERS_INTENT !== 'true') {
     const configured = readyClient.guilds.cache.some((guild) => Boolean(welcome.getConfig(guild.id).channel));
@@ -586,6 +592,7 @@ client.on(Events.MessageCreate, async (message) => {
 async function handleMessage(message) {
   if (await applyRepeatSpamProtection(message)) return;
   if (message.guild && !message.author.bot) profiles.observe(message.guild.id, message.author.id);
+  await afk.handleMessage(message);
 
   normalizeCustomPrefix(message);
   if (await extraCommands.handlePrefixCommand(message)) return;
@@ -703,6 +710,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 async function handleInteraction(interaction) {
+  if (await polls.handleComponent(interaction)) return;
   if (await profileCommand.handleComponent(interaction)) return;
   if (await lookup.handleComponent(interaction)) return;
   // Panel de bienvenida, abrazos y propuestas de matrimonio.
