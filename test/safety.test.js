@@ -42,11 +42,13 @@ test('un candado de un proceso muerto no bloquea el arranque', () => {
   assert.equal(fs.existsSync(lockFile), false);
 });
 
-test('un candado reciente de otra máquina también bloquea', () => {
+test('un candado de otra máquina no bloquea un contenedor nuevo', () => {
   const lockFile = tempLockFile();
   fs.writeFileSync(lockFile, JSON.stringify({ pid: 42, host: 'otra-maquina', startedAt: Date.now() }));
 
-  assert.throws(() => acquireInstanceLock(lockFile), /otra copia del bot/);
+  const lock = acquireInstanceLock(lockFile);
+  assert.equal(fs.existsSync(lockFile), true);
+  lock.release();
 });
 
 test('release es idempotente y no borra el candado de otra copia', () => {

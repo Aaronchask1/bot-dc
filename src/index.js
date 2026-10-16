@@ -1,5 +1,10 @@
 require('dotenv').config();
 const path = require('node:path');
+const dns = require('node:dns');
+
+// En hosts donde IPv6 tarda o no tiene ruta hacia Discord, evita el intento
+// fallido previo. No cambia la latencia física, pero reduce reconexiones.
+try { dns.setDefaultResultOrder('ipv4first'); } catch { /* Node antiguo: usar orden por defecto. */ }
 
 const {
   ActionRowBuilder,
@@ -94,6 +99,7 @@ const HELP_CATEGORIES = [
   { id: 'social', label: '💞 Social', description: 'Besos, abrazos y matrimonio.' },
   { id: 'perfil', label: '🪪 Perfil y utilidad', description: 'Perfiles, datos y herramientas.' },
   { id: 'comunidad', label: '🎉 Comunidad', description: 'AFK, encuestas, recordatorios y sugerencias.' },
+  { id: 'economia', label: '🎮 Economía y juegos', description: 'Trabajo, pesca, banco y ranking.' },
   { id: 'servidor', label: '⚙️ Servidor', description: 'Bienvenida, prefijos, roles y voz.' },
   { id: 'moderacion', label: '🛡️ Moderación', description: 'Limpieza y acciones de moderación.' },
 ];
@@ -117,6 +123,7 @@ const EXTRA_COMMAND_CATEGORIES = {
   hug: 'social', marry: 'social', wife: 'social', divorce: 'social',
   avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil',
   afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad', fun: 'comunidad', act: 'social',
+  balance: 'economia', work: 'economia', fish: 'economia', daily: 'economia', bank: 'economia', pay: 'economia', rich: 'economia', bag: 'economia',
   prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
   purge: 'moderacion', rol: 'moderacion', steal: 'moderacion',
 };
@@ -592,7 +599,9 @@ client.on(Events.MessageCreate, async (message) => {
 async function handleMessage(message) {
   if (await applyRepeatSpamProtection(message)) return;
   if (message.guild && !message.author.bot) profiles.observe(message.guild.id, message.author.id);
-  await afk.handleMessage(message);
+  // AFK nunca debe retrasar la respuesta de un comando. Sus fallos se manejan
+  // internamente y se envía como tarea independiente.
+  void afk.handleMessage(message);
 
   normalizeCustomPrefix(message);
   if (await extraCommands.handlePrefixCommand(message)) return;

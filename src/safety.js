@@ -30,11 +30,13 @@ function readLock(lockFile) {
 /**
  * Guarda un candado en disco para que solo pueda ejecutarse una copia por carpeta.
  * Si el candado pertenece a un proceso vivo de esta máquina, lanza un error.
- * Los candados de otras máquinas se consideran válidos durante `foreignTtlMs`.
+ * Un volumen persistente de Railway puede conservar el candado de un contenedor
+ * ya destruido: jamás bloqueamos por un hostname ajeno porque eso crea un bucle
+ * de reinicios y el bot queda sin responder.
  */
 function acquireInstanceLock(lockFile, {
   maxAgeMs = 24 * 60 * 60_000,
-  foreignTtlMs = 30 * 60_000,
+  foreignTtlMs = 0,
   pid = process.pid,
 } = {}) {
   fs.mkdirSync(path.dirname(lockFile), { recursive: true });
@@ -43,12 +45,12 @@ function acquireInstanceLock(lockFile, {
   if (existing) {
     const sameHost = existing.host === os.hostname();
     const alive = sameHost && existing.pid !== pid && isProcessAlive(existing.pid);
-    const recentForeign = !sameHost && Date.now() - existing.startedAt < foreignTtlMs;
+    // Se conserva el parámetro para compatibilidad con llamadas antiguas, pero
+    // no se puede verificar un PID de otra máquina de forma segura.
+    void foreignTtlMs;
 
-    if (alive || recentForeign) {
-      const detail = alive
-        ? `PID ${existing.pid} en ${existing.host}`
-        : `otra máquina (${existing.host || 'desconocida'})`;
+    if (alive) {
+      const detail = `PID ${existing.pid} en ${existing.host}`;
       throw new Error(
         `Ya hay otra copia del bot corriendo (${detail}). `
         + 'Cada copia responde a todo lo que pasa, por eso el bot se repite. '

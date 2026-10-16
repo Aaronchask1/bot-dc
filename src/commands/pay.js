@@ -1,0 +1,5 @@
+const economy = require('../lib/economy');
+module.exports = { name: 'pay', aliases: ['give', 'pagar'], description: 'Transfiere monedas a otra persona.', usage: 'xyb pay @persona cantidad', guildOnly: true, resolveMember: false,
+  slash: { description: 'Transfiere monedas.', setup(builder) { return builder.addUserOption((option) => option.setName('usuario').setDescription('Quién recibe').setRequired(true)).addIntegerOption((option) => option.setName('cantidad').setDescription('Cantidad').setRequired(true).setMinValue(1)); } },
+  async execute({ args, message, user, target, isSlash, interaction, guild, reply, fail }) { const person = isSlash ? interaction.options.getUser('usuario', true) : (message?.mentions?.users?.first?.() ?? target); const amount = isSlash ? interaction.options.getInteger('cantidad', true) : args.find((item) => /^\d+$/.test(item)); if (!person || person.bot) return fail('Menciona a una persona: `xyb pay @persona 100`.'); const result = economy.transfer(guild.id, user.id, person.id, amount); return reply(result ? `💸 ${user} envió **${result.coins}** monedas a ${person}.` : 'No tienes suficientes monedas o la cantidad no es válida.'); },
+};

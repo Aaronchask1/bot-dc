@@ -1,0 +1,4 @@
+const economy = require('../lib/economy');
+module.exports = { name: 'bag', aliases: ['mochila', 'inventory'], description: 'Muestra tus peces y colección.', usage: 'xyb bag [@persona]', guildOnly: true, resolveMember: true,
+  slash: { description: 'Muestra la colección de pesca.', setup(builder) { return builder.addUserOption((option) => option.setName('usuario').setDescription('Persona')); } }, async execute({ guild, user, target, isSlash, interaction, reply }) { const person = isSlash ? (interaction.options.getUser('usuario') ?? user) : (target ?? user); const data = economy.get(guild.id, person.id); const fish = Object.entries(data.fish); return reply(`🎒 **Mochila de ${person.username}**\n🎣 Capturas: **${data.catches}**\n${fish.length ? fish.map(([name, amount]) => `• ${name} × **${amount}**`).join('\n') : 'Aún no tiene peces. Usa `xyb fish`.'}`); },
+};
