@@ -5,6 +5,7 @@ const {
   EmbedBuilder,
   MessageFlags,
 } = require('discord.js');
+const socialCard = require('./social-card');
 
 // Abrazos de anime revisados a ojo, todos de 500 px para que se vean grandes.
 const HUG_IMAGES = [
@@ -52,7 +53,10 @@ async function handleComponent(interaction) {
     return true;
   }
 
-  await interaction.reply({ embeds: [embed(`<@${toId}> le devuelve el abrazo a <@${fromId}> 🫂`)] });
+  const [from, to] = await Promise.all([
+    interaction.client.users.fetch(fromId), interaction.client.users.fetch(toId),
+  ]);
+  await interaction.reply(await socialCard.card({ left: to, right: from, title: 'ABRAZO DEVUELTO', subtitle: `${to.username} le devuelve el abrazo a ${from.username}`, badge: '🫂', color: '#9ad9a0', file: 'hug-back.png' }));
   try {
     await interaction.message.edit({ components: [] });
   } catch { /* si el mensaje ya no está, no es problema */ }

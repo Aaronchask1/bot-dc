@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const socialCard = require('../lib/social-card');
 const choices = ['Sí.', 'No.', 'Probablemente.', 'Mejor no contar con ello.', 'Claro que sí.', 'Pregunta de nuevo más tarde.', 'Las señales apuntan a que sí.'];
 const pick = (items) => items[Math.floor(Math.random() * items.length)];
 
@@ -10,7 +10,7 @@ module.exports = {
     .addUserOption((option) => option.setName('usuario1').setDescription('Primera persona para ship'))
     .addUserOption((option) => option.setName('usuario2').setDescription('Segunda persona para ship'));
   } },
-  async execute({ invokedName, args, text, isSlash, interaction, message, reply }) {
+  async execute({ invokedName, args, text, isSlash, interaction, message, reply, defer }) {
     const action = isSlash ? interaction.options.getString('accion', true) : (invokedName === 'fun' ? args.shift()?.toLowerCase() : invokedName);
     const body = isSlash ? (interaction.options.getString('texto') ?? '') : (invokedName === 'fun' ? args.join(' ') : text);
     if (['8ball', 'eightball'].includes(action)) return reply(body ? `🎱 **Pregunta:** ${body}\n**Respuesta:** ${pick(choices)}` : 'Uso: `xyb 8ball ¿hoy gano?`.');
@@ -25,7 +25,8 @@ module.exports = {
         : [...(message?.mentions?.users?.values?.() ?? [])].slice(0, 2);
       if (people.length !== 2) return reply('Uso: `xyb ship @persona1 @persona2`.');
       const percent = Math.floor(Math.random() * 101);
-      return reply({ embeds: [new EmbedBuilder().setColor(0xFF8C69).setTitle('💘 Compatibilidad').setDescription(`${people[0]} + ${people[1]}\n\n**${percent}%** ${'💗'.repeat(Math.max(1, Math.ceil(percent / 20)))}`)] });
+      if (isSlash) await defer();
+      return reply(await socialCard.card({ left: people[0], right: people[1], title: `${percent}%`, subtitle: 'Compatibilidad', badge: '💘', color: '#ff7aa8', file: 'ship.png' }));
     }
     return reply('Usa `xyb 8ball`, `xyb choose` o `xyb coinflip`.');
   },

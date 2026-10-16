@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const hugs = require('../lib/hugs');
+const socialCard = require('../lib/social-card');
 
 module.exports = {
   name: 'hug',
@@ -16,7 +17,7 @@ module.exports = {
     },
   },
 
-  async execute({ target, user, fail, reply }) {
+  async execute({ target, user, isSlash, fail, reply, defer }) {
     const person = target ?? user;
     if (person.id === user.id) {
       await fail('¿Abrazarte a ti mismo? Ni de chiste.');
@@ -27,9 +28,9 @@ module.exports = {
       return;
     }
 
-    await reply({
-      embeds: [hugs.embed(`${user} abraza a ${person}.`)],
-      components: [hugs.backButton(user.id, person.id)],
-    });
+    if (isSlash) await defer();
+    const payload = await socialCard.card({ left: user, right: person, title: 'ABRAZO', subtitle: `${user.username} abraza a ${person.username}`, badge: '🫂', color: '#9ad9a0', file: 'hug.png' });
+    payload.components = [hugs.backButton(user.id, person.id)];
+    await reply(payload);
   },
 };
