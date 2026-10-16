@@ -7,10 +7,10 @@ module.exports = {
   slash: { description: 'Herramientas divertidas.', setup(builder) { return builder
     .addStringOption((option) => option.setName('accion').setDescription('8ball, choose, moneda o ship').setRequired(true).addChoices({ name: '8ball', value: '8ball' }, { name: 'Elegir', value: 'choose' }, { name: 'Moneda', value: 'coinflip' }, { name: 'Ship', value: 'ship' }))
     .addStringOption((option) => option.setName('texto').setDescription('Pregunta u opciones separadas por |'))
-    .addUserOption((option) => option.setName('usuario1').setDescription('Primera persona para ship'))
-    .addUserOption((option) => option.setName('usuario2').setDescription('Segunda persona para ship'));
+    .addUserOption((option) => option.setName('usuario1').setDescription('Persona para hacer ship contigo'))
+    .addUserOption((option) => option.setName('usuario2').setDescription('Opcional: segunda persona para comparar a dos terceros'));
   } },
-  async execute({ invokedName, args, text, isSlash, interaction, message, reply, defer }) {
+  async execute({ invokedName, args, text, user, isSlash, interaction, message, reply, defer }) {
     const action = isSlash ? interaction.options.getString('accion', true) : (invokedName === 'fun' ? args.shift()?.toLowerCase() : invokedName);
     const body = isSlash ? (interaction.options.getString('texto') ?? '') : (invokedName === 'fun' ? args.join(' ') : text);
     if (['8ball', 'eightball'].includes(action)) return reply(body ? `🎱 **Pregunta:** ${body}\n**Respuesta:** ${pick(choices)}` : 'Uso: `xyb 8ball ¿hoy gano?`.');
@@ -20,10 +20,13 @@ module.exports = {
     }
     if (['coinflip', 'moneda'].includes(action)) return reply(`🪙 Salió **${pick(['cara', 'cruz'])}**.`);
     if (action === 'ship') {
-      const people = isSlash
-        ? [interaction.options.getUser('usuario1'), interaction.options.getUser('usuario2')].filter(Boolean)
-        : [...(message?.mentions?.users?.values?.() ?? [])].slice(0, 2);
-      if (people.length !== 2) return reply('Uso: `xyb ship @persona1 @persona2`.');
+      const mentioned = [...(message?.mentions?.users?.values?.() ?? [])];
+      const first = isSlash ? interaction.options.getUser('usuario1') : mentioned[0];
+      const second = isSlash ? interaction.options.getUser('usuario2') : mentioned[1];
+      // The normal use is `xyb ship @persona`: the caller is the other half.
+      // Two mentions remain supported for comparing two people other than the caller.
+      const people = second ? [first ?? user, second] : first ? [user, first] : [];
+      if (people.length !== 2) return reply('Uso: `xyb ship @persona`. También puedes mencionar a dos personas para compararlas entre sí.');
       const percent = Math.floor(Math.random() * 101);
       if (isSlash) await defer();
       return reply(await socialCard.card({ left: people[0], right: people[1], title: `${percent}%`, subtitle: 'Compatibilidad', badge: '💘', color: '#ff7aa8', file: 'ship.png' }));
