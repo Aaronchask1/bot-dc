@@ -117,7 +117,7 @@ test('busca por REST si la persona no está en caché', async () => {
   };
   const result = await resolveMemberAsync(guild, 'csr');
   assert.equal(result.member, csr);
-  assert.deepEqual(received, { query: 'csr', limit: 10 });
+  assert.deepEqual(received, { query: 'csr', limit: 10, time: 2500 });
 });
 
 test('no interpreta palabras que solo empiezan por el prefijo como comandos', async () => {
