@@ -32,6 +32,7 @@ const lookup = require('./commands/lookup');
 const kisses = require('./lib/kisses');
 const profiles = require('./lib/profiles');
 const profileCommand = require('./commands/profile');
+const tradeCommand = require('./commands/trade');
 const { prepareKissPayload } = require('./lib/kiss-media');
 const afk = require('./lib/afk');
 const reminders = require('./lib/reminders');
@@ -123,7 +124,7 @@ const EXTRA_COMMAND_CATEGORIES = {
   hug: 'social', marry: 'social', wife: 'social', divorce: 'social',
   avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil',
   afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad', fun: 'comunidad', act: 'social',
-  balance: 'economia', work: 'economia', fish: 'economia', daily: 'economia', bank: 'economia', pay: 'economia', rich: 'economia', bag: 'economia',
+  balance: 'economia', work: 'economia', fish: 'economia', daily: 'economia', bank: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia',
   prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
   purge: 'moderacion', rol: 'moderacion', steal: 'moderacion',
 };
@@ -719,6 +720,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 async function handleInteraction(interaction) {
+  if (await tradeCommand.handleComponent(interaction)) return;
   if (await polls.handleComponent(interaction)) return;
   if (await profileCommand.handleComponent(interaction)) return;
   if (await lookup.handleComponent(interaction)) return;

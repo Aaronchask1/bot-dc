@@ -1,4 +1,4 @@
 const economy = require('../lib/economy');
 module.exports = { name: 'fish', aliases: ['pescar', 'fishing'], description: 'Pesca y colecciona peces cada 10 minutos.', usage: 'xyb fish', guildOnly: true,
-  slash: { description: 'Pesca y gana monedas.' }, async execute({ guild, user, reply }) { const result = economy.claim(guild.id, user.id, 'fish'); return reply(result.ok ? `🎣 ${user} pescó **${result.fish}** y ganó **${result.coins}** monedas.` : `🎣 El mar se está calmando; vuelve en **${economy.relative(result.wait)}**.`); },
+  slash: { description: 'Pesca y gana monedas.' }, async execute({ guild, user, reply }) { const result = economy.claim(guild.id, user.id, 'fish'); if (!result.ok) return reply(`🎣 El mar se está calmando; vuelve en **${economy.relative(result.wait)}**.`); const danger = result.accident ? (result.accident.protected ? '\n🛡️ El seguro protegió tu bolsillo.' : `\n💀 Una ola te tumbó: perdiste **${result.accident.lost}** del bolsillo; el banco está a salvo.`) : ''; return reply(`🎣 ${user} pescó **${result.fish}** y ganó **${result.coins}** monedas${result.bait ? ' con carnada premium' : ''}.${danger}`); },
 };
