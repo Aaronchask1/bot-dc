@@ -32,6 +32,7 @@ const lookup = require('./commands/lookup');
 const kisses = require('./lib/kisses');
 const profiles = require('./lib/profiles');
 const profileCommand = require('./commands/profile');
+const uidCommand = require('./commands/uid');
 const tradeCommand = require('./commands/trade');
 const { prepareKissPayload } = require('./lib/kiss-media');
 const animeMedia = require('./lib/anime-media');
@@ -124,7 +125,7 @@ const CORE_HELP_COMMANDS = [
 
 const EXTRA_COMMAND_CATEGORIES = {
   hug: 'social', marry: 'social', wife: 'social', divorce: 'social',
-  avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil',
+  avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil', uid: 'perfil',
   afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad', fun: 'comunidad', act: 'social',
   balance: 'economia', work: 'economia', fish: 'economia', daily: 'economia', bank: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia',
   prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
@@ -733,6 +734,7 @@ async function handleInteraction(interaction) {
   if (await tradeCommand.handleComponent(interaction)) return;
   if (await polls.handleComponent(interaction)) return;
   if (await profileCommand.handleComponent(interaction)) return;
+  if (await uidCommand.handleComponent(interaction)) return;
   if (await lookup.handleComponent(interaction)) return;
   // Panel de bienvenida, abrazos y propuestas de matrimonio.
   if (await welcome.handleComponent(interaction)) return;
