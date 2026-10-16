@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 
 module.exports = {
   name: 'wife',
+  resolveMember: true,
   aliases: ['esposa', 'marido', 'pareja', 'novio', 'novia'],
   description: 'Mira con quién estás casada(o).',
   usage: 'xyb wife [persona]',

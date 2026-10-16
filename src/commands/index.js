@@ -155,7 +155,7 @@ async function handlePrefixCommand(message) {
   }
 
   const mentioned = message.mentions?.users?.first?.() ?? null;
-  const resolved = mentioned || !message.guild || command.resolveMember === false
+  const resolved = mentioned || !message.guild || !args.length || command.resolveMember !== true
     ? null : (await members.resolveMemberAsync(message.guild, args.join(' '))).member?.user;
   const context = buildContext(command, {
     message,
