@@ -48,8 +48,18 @@ function createSession(user, guildId, filters, now = Date.now()) {
     avatar: user.displayAvatarURL?.({ size: 256 }) ?? 'https://cdn.discordapp.com/embed/avatars/0.png',
     expiresAt: now + SESSION_MS,
   };
+  session.suggestions = suggestions(session);
   sessions.set(token, session);
   return session;
+}
+
+function suggestions(filters, amount = 8) {
+  const values = new Set();
+  for (let attempt = 0; values.size < amount && attempt < amount * 80; attempt += 1) {
+    const value = history.candidate(filters);
+    if (value) values.add(value);
+  }
+  return [...values];
 }
 
 function button(session, action, emoji, style = ButtonStyle.Secondary, disabled = false) {
@@ -66,6 +76,9 @@ function panel(session, { closed = false } = {}) {
   if (session.query) filters.push(`contiene \`${session.query}\``);
   const lines = result.entries.map(({ username, checkedAt }) =>
     `\`${username}\` · comprobado <t:${Math.floor(checkedAt / 1000)}:R>`);
+  const suggested = result.entries.length ? '' : (session.suggestions?.length
+    ? `**Sugerencias sin comprobar**\n${session.suggestions.map((username) => `\`${username}\``).join(' · ')}\n\n`
+    : '');
   const empty = 'Todavía no hay coincidencias comprobadas con estos filtros. 🔎 busca otra tanda; ⚙️ cambia los filtros.';
   const caveat = session.type === 'vanities'
     ? 'Sin invitación activa; NO garantiza que puedas asignar esa vanity.'
@@ -75,7 +88,7 @@ function panel(session, { closed = false } = {}) {
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}\n-# ${filters.join(' · ')}`))
       .setThumbnailAccessory(new ThumbnailBuilder().setURL(session.avatar).setDescription('Avatar de quien consulta')))
     .addSeparatorComponents(new SeparatorBuilder())
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n') || empty))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n') || `${suggested}${empty}`))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
       `-# Página ${result.page + 1}/${result.pages} · ${result.total} resultados${closed ? ' · Cerrado' : ''}\n${session.notice ?? 'Preparando búsqueda global…'}\n-# ${caveat}`,
@@ -204,6 +217,7 @@ async function handleComponent(interaction) {
       return true;
     }
     session.query = query;
+    session.suggestions = suggestions(session);
     session.exactName = null;
     session.page = 0;
   } else if (action === 'filter-submit') {
@@ -219,6 +233,7 @@ async function handleComponent(interaction) {
     const filters = { type: type.startsWith('vanit') ? 'vanities' : 'usernames', length: lengthText ? Number(lengthText) : null, mode, query: session.query };
     if (!validFilters(filters)) filters.query = '';
     Object.assign(session, filters, { exactName: null });
+    session.suggestions = suggestions(session);
     session.page = 0;
   } else return true;
   // Los modales nacen de un botón de este mensaje: update mantiene un panel.
@@ -263,5 +278,5 @@ module.exports = {
     } catch (error) { sessions.delete(session.token); throw error; }
   },
   handleComponent,
-  __test: { parseArgs, createSession, panel, modal, sessions, SESSION_MS, runSearch, validFilters },
+  __test: { parseArgs, createSession, panel, modal, sessions, SESSION_MS, runSearch, validFilters, suggestions },
 };
