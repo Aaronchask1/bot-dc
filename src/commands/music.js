@@ -14,7 +14,10 @@ function initialize(client) {
   const url = process.env.LAVALINK_URL.replace(/^wss?:\/\//, '').replace(/\/$/, '');
   playerManager = new Shoukaku(new Connectors.DiscordJS(client), [{
     name: 'xyb-audio', url, auth: process.env.LAVALINK_PASSWORD, secure: process.env.LAVALINK_SECURE === 'true',
-  }], { reconnectTries: 6, reconnectInterval: 5, restTimeout: 20 });
+  // Railway puede tardar más de medio minuto al reconstruir Lavalink y sus
+  // plugins. Conservamos la conexión durante diez minutos en vez de rendirnos
+  // tras los seis intentos predeterminados.
+  }], { reconnectTries: 120, reconnectInterval: 5, restTimeout: 20 });
   playerManager.on('ready', (name) => logger.info(`[music] Nodo ${name} listo.`));
   playerManager.on('error', (name, error) => logger.error(`[music] Nodo ${name}: ${error.message}`, error));
   return playerManager;
