@@ -51,9 +51,9 @@ async function payload(state) {
   const select = (field, placeholder, options) => new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
     .setCustomId(`quote:${state.id}:${field}`).setPlaceholder(placeholder).addOptions(options.map((option) => ({ ...option, default: option.value === state[field] }))));
   card.components = [
-    select('font', 'Satoshi', [{ label: 'Satoshi', value: 'satoshi', emoji: '✦' }, { label: 'Clásico', value: 'classic', emoji: '✒️' }]),
-    select('color', 'White', [{ label: 'White', value: 'white', emoji: '⚪' }, { label: 'Purple', value: 'purple', emoji: '🟣' }, { label: 'Cream', value: 'cream', emoji: '🟤' }]),
-    select('layout', 'Clásico (ancho)', [{ label: 'Clásico (ancho)', value: 'wide', emoji: '↔️' }, { label: 'Vertical', value: 'vertical', emoji: '↕️' }]),
+    select('font', 'Satoshi', [{ label: 'Satoshi', value: 'satoshi' }, { label: 'Clásico', value: 'classic' }]),
+    select('color', 'White', [{ label: 'White', value: 'white' }, { label: 'Purple', value: 'purple' }, { label: 'Cream', value: 'cream' }]),
+    select('layout', 'Clásico (ancho)', [{ label: 'Clásico (ancho)', value: 'wide' }, { label: 'Vertical', value: 'vertical' }]),
   ];
   return card;
 }

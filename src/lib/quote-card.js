@@ -27,9 +27,14 @@ function lines(ctx, text, width) {
 function crop(linesToCrop, max) { return linesToCrop.length > max ? [...linesToCrop.slice(0, max - 1), `${linesToCrop[max - 1].slice(0, -1)}…`] : linesToCrop; }
 function drawCover(ctx, image, x, y, width, height) {
   if (!image) { ctx.fillStyle = '#25252d'; ctx.fillRect(x, y, width, height); return; }
-  const scale = Math.max(width / image.width, height / image.height);
-  const drawWidth = image.width * scale; const drawHeight = image.height * scale;
-  ctx.drawImage(image, x + ((width - drawWidth) / 2), y + ((height - drawHeight) / 2), drawWidth, drawHeight);
+  try {
+    const scale = Math.max(width / image.width, height / image.height);
+    const drawWidth = image.width * scale; const drawHeight = image.height * scale;
+    ctx.drawImage(image, x + ((width - drawWidth) / 2), y + ((height - drawHeight) / 2), drawWidth, drawHeight);
+  } catch {
+    // Un avatar remoto corrupto nunca debe impedir crear la tarjeta.
+    ctx.fillStyle = '#25252d'; ctx.fillRect(x, y, width, height);
+  }
 }
 async function card({ text, author, font = 'satoshi', color = 'white', layout = 'wide' }) {
   const wide = layout === 'wide'; const width = wide ? 1100 : 900; const height = wide ? 560 : 720;
