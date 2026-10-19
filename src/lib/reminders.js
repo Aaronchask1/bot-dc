@@ -6,13 +6,13 @@ const timers = new Map();
 let client = null;
 
 function parseDuration(value) {
-  const match = String(value ?? '').trim().match(/^(\d{1,4})\s*(m|min|h|d)$/i);
+  const match = String(value ?? '').trim().match(/^(\d{1,4})\s*(m|min|mins?|minutos?|h|hrs?|horas?|d|días?)$/i);
   if (!match) return null;
   const amount = Number(match[1]);
   const unit = match[2].toLowerCase();
-  const multiplier = unit === 'd' ? 86_400_000 : unit === 'h' ? 3_600_000 : 60_000;
+  const multiplier = /^d|día/i.test(unit) ? 86_400_000 : /^h|hora/i.test(unit) ? 3_600_000 : 60_000;
   const ms = amount * multiplier;
-  return ms >= 60_000 && ms <= 30 * 86_400_000 ? ms : null;
+  return ms >= 60_000 && ms <= 24 * 60 * 60_000 ? ms : null;
 }
 
 function recordsFor(userId) {
@@ -29,8 +29,9 @@ function schedule(record) {
     if (!current) return;
     store.delete(record.id);
     try {
-      const user = await client.users.fetch(current.userId);
-      await user.send(`⏰ **Recordatorio:** ${current.text}`);
+      const channel = await client.channels.fetch(current.channelId);
+      if (!channel?.isTextBased?.()) return;
+      await channel.send({ content: `<@${current.userId}> ⏰ **Recordatorio:** ${current.text}`, allowedMentions: { users: [current.userId] } });
     } catch {
       // Los DM pueden estar cerrados; se elimina para no enviarlo infinitamente.
     }
@@ -44,10 +45,11 @@ function start(discordClient) {
   for (const record of Object.values(store.read())) schedule(record);
 }
 
-function create(userId, rawDuration, text) {
+function create(userId, rawDuration, text, location = {}) {
   const ms = parseDuration(rawDuration);
-  if (!ms || !String(text ?? '').trim()) return null;
-  const record = { id: crypto.randomUUID().slice(0, 8), userId, text: String(text).trim().slice(0, 500), at: Date.now() + ms };
+  if (!ms || !location.guildId || !location.channelId) return null;
+  const message = String(text ?? '').trim().slice(0, 500) || 'Recordatorio';
+  const record = { id: crypto.randomUUID().slice(0, 8), userId, text: message, guildId: location.guildId, channelId: location.channelId, at: Date.now() + ms };
   store.set(record.id, record);
   schedule(record);
   return record;

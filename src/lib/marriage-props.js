@@ -37,11 +37,6 @@ const REJECT_IMAGES = [
   'https://media1.tenor.com/m/0aSY5qsa0MgAAAAd/anime-no.gif',
 ];
 
-animeMedia.warm({
-  proposal: PROPOSE_IMAGES,
-  marriage_accept: ACCEPT_IMAGES,
-  marriage_reject: REJECT_IMAGES,
-});
 
 function pick(images, pool) {
   return animeMedia.pick(pool, images);

@@ -37,8 +37,16 @@ const { prepareKissPayload } = require('./lib/kiss-media');
 const animeMedia = require('./lib/anime-media');
 const afk = require('./lib/afk');
 const reminders = require('./lib/reminders');
+const guildTag = require('./lib/guild-tag');
 const polls = require('./lib/polls');
 const logger = require('./logger');
+const autoDelete = require('./lib/auto-delete');
+const { createAutoresponder } = require('./lib/autoresponder');
+const { createAutoReact } = require('./lib/autoreact');
+const depositCommand = require('./commands/deposit');
+const shopCommand = require('./commands/shop');
+const bagCommand = require('./commands/bag');
+const petCommand = require('./commands/pet');
 
 const PREFIX = 'xyb';
 const REPEATED_MESSAGE_LIMIT = 8;
@@ -48,6 +56,8 @@ const MAX_PURGE_MESSAGES = 1000;
 const repeatTracker = new Map();
 const claimMessage = createReplayGuard();
 const claimInteraction = createReplayGuard();
+const autoresponder = createAutoresponder();
+const autoreact = createAutoReact();
 const LOCK_FILE = path.join(__dirname, '..', 'data', 'bot.lock');
 // Los besos y regalos son imágenes grandes, revisadas a ojo. Discord las
 // dibuja a su resolución real, por eso estas listas evitan GIF pequeños.
@@ -98,12 +108,15 @@ const client = new Client({
   ],
 });
 
+autoDelete.install(client);
+
 const HELP_CATEGORIES = [
-  { id: 'social', label: '💞 Social', description: 'Besos, abrazos y matrimonio.' },
-  { id: 'perfil', label: '🪪 Perfil y utilidad', description: 'Perfiles, datos y herramientas.' },
+  { id: 'social', label: '💞 Social', description: 'Besos, abrazos, acciones y matrimonio.' },
+  { id: 'perfil', label: '🪪 Perfil y utilidad', description: 'Perfiles, imágenes, citas y herramientas.' },
   { id: 'comunidad', label: '🎉 Comunidad', description: 'AFK, encuestas, recordatorios y sugerencias.' },
-  { id: 'economia', label: '🎮 Economía y juegos', description: 'Trabajo, pesca, banco y ranking.' },
-  { id: 'servidor', label: '⚙️ Servidor', description: 'Bienvenida, prefijos, roles y voz.' },
+  { id: 'economia', label: '💰 Economía y mascotas', description: 'Trabajo, pesca, banco, tienda y mascotas.' },
+  { id: 'diversion', label: '🎲 Diversión', description: 'Suerte, trivia, minijuegos y texto divertido.' },
+  { id: 'servidor', label: '⚙️ Servidor', description: 'Bienvenida, prefijos, roles y automatizaciones.' },
   { id: 'moderacion', label: '🛡️ Moderación', description: 'Limpieza y acciones de moderación.' },
 ];
 
@@ -123,12 +136,13 @@ const CORE_HELP_COMMANDS = [
 ];
 
 const EXTRA_COMMAND_CATEGORIES = {
-  hug: 'social', marry: 'social', wife: 'social', divorce: 'social',
-  avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil',
-  afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad', fun: 'comunidad', act: 'social',
-  balance: 'economia', work: 'economia', fish: 'economia', daily: 'economia', bank: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia',
-  prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
-  purge: 'moderacion', rol: 'moderacion', steal: 'moderacion',
+  hug: 'social', marry: 'social', wife: 'social', divorce: 'social', act: 'social',
+  img: 'perfil', avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil', quote: 'perfil', profile: 'perfil',
+  afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad',
+  fun: 'diversion', games: 'diversion',
+  balance: 'economia', work: 'economia', fish: 'economia', mine: 'economia', daily: 'economia', bank: 'economia', deposit: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia', pet: 'economia',
+  add: 'servidor', autoresponder: 'servidor', autoreact: 'servidor', prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
+  purge: 'moderacion', unban: 'moderacion', rol: 'moderacion', steal: 'moderacion',
 };
 
 function helpCommands(category) {
@@ -140,7 +154,7 @@ function helpCommands(category) {
     .map((command) => ({
       category: EXTRA_COMMAND_CATEGORIES[command.name] ?? 'perfil',
       usage: (command.usage ?? `${PREFIX} ${command.name}`).replace(new RegExp(`^${PREFIX}\\s+`, 'i'), ''),
-      description: command.description,
+      description: `${command.description}${command.aliases?.length ? ` · Alias: ${command.aliases.slice(0, 4).join(', ')}` : ''}`,
     }));
   return [...core, ...extra];
 }
@@ -540,6 +554,7 @@ client.once(Events.ClientReady, async (readyClient) => {
     marriage_accept: marriageProps.ACCEPT_IMAGES, marriage_reject: marriageProps.REJECT_IMAGES,
   });
   reminders.start(readyClient);
+  guildTag.start(readyClient);
 
   if (process.env.MEMBERS_INTENT !== 'true') {
     const configured = readyClient.guilds.cache.some((guild) => Boolean(welcome.getConfig(guild.id).channel));
@@ -570,6 +585,17 @@ function normalizeCustomPrefix(message) {
   const content = message.content ?? '';
   const trimmed = content.trim();
   if (!trimmed || trimmed.toLowerCase().startsWith(PREFIX)) return false;
+
+  // Atajo visual del recordatorio: `xrm 10m` equivale a `xyb rm 10m`.
+  if (/^xrm(?:\s|$)/i.test(trimmed)) {
+    message.content = `${PREFIX} rm${trimmed.slice(3)}`;
+    return true;
+  }
+  // Atajo visual de la mochila: `xbag` equivale a `xyb bag`.
+  if (/^xbag(?:\s|$)/i.test(trimmed)) {
+    message.content = `${PREFIX} bag${trimmed.slice(4)}`;
+    return true;
+  }
 
   // Atajo de la captura: .lookup 3, sin cambiar los prefijos de otros comandos.
   if (/^\.lookup(?:\s|$)/i.test(trimmed)) {
@@ -615,6 +641,9 @@ async function handleMessage(message) {
   void afk.handleMessage(message);
 
   normalizeCustomPrefix(message);
+  const responded = await autoresponder.handle(message);
+  void autoreact.handle(message);
+  if (responded) return;
   if (await extraCommands.handlePrefixCommand(message)) return;
 
   const botMention = new RegExp(`^<@!?${client.user.id}>\\s*$`);
@@ -730,6 +759,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 async function handleInteraction(interaction) {
+  if (await depositCommand.handleComponent(interaction)) return;
+  if (await shopCommand.handleComponent(interaction)) return;
+  if (await bagCommand.handleComponent(interaction)) return;
+  if (await petCommand.handleComponent(interaction)) return;
   if (await tradeCommand.handleComponent(interaction)) return;
   if (await polls.handleComponent(interaction)) return;
   if (await profileCommand.handleComponent(interaction)) return;
@@ -962,6 +995,7 @@ module.exports = {
   helpCommands,
   helpComponents,
   helpEmbed,
+  autoresponder,
   kissPayload,
   normalizeCustomPrefix,
   start,

@@ -14,12 +14,14 @@ Base inicial del bot privado de Discord.
 - Limpieza: `xyb purge 1-1000` o `xyb c 1-1000` para moderadores; `xyb purge bots` o `xyb c bots [1-1000]` borra solo mensajes de bots; `xyb pg` o `xyb apg` limpia los mensajes propios.
 - Antispam: silencia automáticamente por una hora tras 8 mensajes consecutivos iguales en menos de 5 minutos.
 - `xyb avatar`, `xyb banner`, `xyb ping`, `xyb botinfo`: ficha, avatar, banner, latencia y estado del bot.
+- `xyb quote texto` o responde con `xyb quote`: genera una tarjeta visual que cita el mensaje y su autor.
 - `.lookup 3`, `!lookup 4`, `xyb lookup 5` o `/lookup`: comprobación global de candidatos, con avatar, fecha de consulta, páginas y filtros. También acepta `lookup vanity 6`.
 - `xyb snipe [n]`: recupera hasta 10 mensajes borrados del canal, con quién los borró.
 - `xyb prefix add !` / `remove` / `set`: agrega prefijos extra (hasta 5). `xyb` nunca se puede quitar.
 - `xyb welcome`: panel con botones para configurar la bienvenida (canal, mensaje, título, footer, color, imagen, thumbnail, mención y embed). `xyb welcomevars` lista las variables y `xyb welcometest` la prueba.
 - `xyb steal`: crea un sticker en el servidor a partir de un emoji o de un PNG/APNG/Lottie.
-- Comunidad: `xyb afk`, `xyb remind`, `xyb poll`, `xyb suggest`, `xyb act` y utilidades `xyb 8ball`, `xyb choose`, `xyb coinflip` y `xyb ship`.
+- Comunidad: `xyb afk`, `xyb remind`, `xyb poll`, `xyb suggest`, `xyb act` y utilidades `xyb 8ball`, `xyb choose`, `xyb coinflip` y `xyb ship`. Al vencer, `xyb remind` te menciona en el mismo canal del servidor donde lo creaste.
+- Mascotas: compra un `🥚 Huevo misterioso` en `xyb shop`, incúbalo con `xyb pet hatch [nombre]` y cuídalo con frutas, pastel, juego y limpieza para ganar niveles.
 
 ## Preparación
 
@@ -118,3 +120,121 @@ El buscador genera hasta 12 candidatos por tanda y comprueba cada uno globalment
 Implementación: consulta pública anónima de usernames `POST /api/v9/unique-username/username-attempt-unauthed` y consulta de invitaciones `GET /api/v10/invites/{code}`. La primera no pertenece a la API documentada de bots y puede dejar de funcionar. No usa tokens de usuarios, cookies, selfbots, proxies ni evasión de CAPTCHA. No requiere Server Members Intent para lookup. Solo hay una tanda global a la vez, con al menos seis segundos entre consultas. Ante 429 respeta la espera indicada; ante restricciones/CAPTCHA detiene las consultas. Nunca interpreta un error como disponibilidad.
 
 La caché se conserva en `data/lookup-cache.json`, hasta 25 000 comprobaciones; los resultados libres/sin invitación caducan a los 15 minutos y los ocupados a la hora. Mantén `data/` en almacenamiento persistente al desplegar. Cada nueva tanda se solicita manualmente; no hay barridos ilimitados en segundo plano. Después de actualizar archivos, reinicia una sola copia del bot con `npm start`; para publicar o actualizar `/lookup`, usa `npm run register`.
+# Etiqueta de servidor obligatoria
+
+La ejecución local mantiene `TAG_ENFORCEMENT_ENABLED=false`; el servicio de Railway
+usa su propia variable para activar las revisiones, evitando dos monitores simultáneos.
+Las consultas de perfil y miembro se contrastan: una etiqueta válida observada
+protege a la persona y se exige ausencia en ambas consultas antes de actuar.
+
+## Imágenes y mensajes temporales
+
+Comando único: `xyb img descripción`, sin subcomandos obligatorios.
+- `xyb img perro`: busca una imagen existente.
+- `xyb img gato gracioso`: busca una plantilla popular de Imgflip.
+- `xyb img gato encima de perro`: busca imágenes existentes relacionadas con la escena.
+- `xyb img paisaje de Japón`: busca imágenes existentes del lugar.
+
+Solo sitios web: Wikimedia Commons, Openverse e Imgflip. No se usa OpenAI,
+no se generan imágenes y no hace falta clave ni saldo. La antigua clave de `.env`
+no se utiliza. La búsqueda prueba la frase original y equivalencias de palabras
+comunes en inglés; no es traducción por IA ni reconocimiento visual. Se ordenan
+resultados según sus títulos/descripciones/etiquetas y se identifican las imágenes
+relacionadas. No se garantiza que reproduzcan exactamente una escena inventada.
+Si no hay coincidencias, se ofrece un enlace a Google Imágenes para abrir en el
+navegador. Google no se rastrea automáticamente. Caché de búsquedas de 5 minutos.
+Documentación: https://api.openverse.org/v1/
+Catálogo de memes: https://imgflip.com/api
+
+`xyb img perro` (alias `xyb imagen perro`) busca imágenes existentes en Wikimedia
+Commons y Openverse, sin clave API ni generación de IA. Devuelve una imagen con autor,
+licencia y enlace a su fuente. Admite búsquedas de hasta 300 caracteres.
+El comando es por prefijo; no requiere registrar comandos slash.
+
+Los mensajes nuevos de este bot en servidores se eliminan 5 minutos después de
+enviarse; los avisos del uniforme, a los 5 minutos. No se eliminan mensajes de
+personas ni de otros bots. Los plazos se guardan en `data/auto-delete.json` y se
+recuperan al reiniciar; borrar un aviso no cancela el plazo de moderación.
+Las respuestas efímeras no producen eventos públicos y quedan fuera de este
+borrado. Los botones dejan de estar disponibles cuando se elimina su mensaje.
+Estos cambios requieren iniciar/reiniciar el bot actualizado; no limpian el historial.
+
+## Autorespuestas
+
+El autoresponder no responde por defecto al mencionar o escribir el nombre de una
+persona, y no incluye reglas automáticas. Solo responde a palabras o frases que un
+administrador añada manualmente con `xyb add autoresponder ...` (o
+`/autoresponder agregar`). No responde a bots, mensajes privados ni comandos `xyb`.
+La configuración requiere Gestionar servidor: `/autoresponder` y `/autoreact`, o
+`xyb autoresponder`/`xyb autoreact` (también `!` y los prefijos añadidos), con
+`ver`, `agregar palabra respuesta`, `quitar palabra`, `activar`, `desactivar` y `reset`.
+`autoreact` usa la misma estructura, pero recibe `agregar palabra emoji` y añade
+la reacción configurada al mensaje; empieza sin reglas para que el servidor elija
+sus propios emojis.
+Atajos rápidos: `xyb add autoresponder palabra respuesta` y `xyb add autoreact palabra emoji`.
+Puedes acumular varias respuestas o reacciones repitiendo el comando, o separándolas con `|`:
+`xyb add autoresponder hola respuesta 1 | respuesta 2` y
+`xyb add autoreact hola 🐷 | 🔥`. Las respuestas se eligen al azar y las reacciones se añaden todas.
+(también funcionan con `!` y los demás prefijos). Estos atajos guardan la regla y
+encienden automáticamente el módulo correspondiente.
+
+Las pruebas automáticas solo cargan `test/*.test.js`. La herramienta manual
+`scripts/uniform-live-test.js` exige `--execute-live` y no se ejecuta bajo el
+runner de pruebas. No ejecutarla salvo que se quiera un aviso y posible ban real.
+
+`TAG_ENFORCEMENT_ENABLED=true` y `TAG_GUILD_ID=1494581763899396136` activan
+la revisión horaria únicamente para Xyb y exigen la etiqueta de ese mismo servidor.
+Configura estas variables también en el hosting si el bot corre allí; `.env` local
+no actualiza Railway ni otra máquina. Reinicia el proceso después de configurarlas.
+Para desactivar, usa `TAG_ENFORCEMENT_ENABLED=false` y reinicia.
+
+La primera revisión al arrancar solo observa. Cada 1 hora se comprueba si la persona
+tiene la etiqueta de Xyb o está impulsando el servidor; cualquiera de las dos
+condiciones la mantiene fuera del flujo de moderación. Cuando falta la etiqueta en dos
+revisiones separadas por al menos una hora, se menciona a la persona en el canal
+`TAG_WARNING_CHANNEL_ID` (en Xyb: #chat, `1494581764390391961`) y se le ordena ponerse
+«el uniforme», indicando que será baneada si no activa la etiqueta en 20 minutos.
+Solo se menciona al destinatario. El plazo empieza después de enviar correctamente
+el aviso; si falla el envío, no se banea. Se comprueban los plazos cada segundo,
+sin consultas de red hasta que venza uno. Tras al menos 20 minutos se vuelve a
+consultar la etiqueta y se banea únicamente si sigue faltando. Los errores de red
+pueden retrasar o cancelar la acción. Ponerse la etiqueta cancela el baneo al
+comprobarlo. Reiniciar descarta los plazos: se requiere nueva evidencia y aviso.
+El bot necesita Ver canal y Enviar mensajes en #chat además de los permisos de ban.
+No se borran mensajes. Todos los bots (actuales y futuros), el propietario,
+las personas que estén impulsando el servidor (`premium_since` en el Guild Member
+de Discord) y los miembros que Discord no permita banear por permisos/jerarquía
+quedan fuera.
+El bot necesita Banear miembros y un rol superior al de las personas afectadas.
+
+Se compara `primary_guild.identity_guild_id` y `identity_enabled`, nunca el nombre,
+apodo, estado, texto de la bio ni solo las letras `xyb`. Un `primary_guild: null`
+explícito indica ausencia; campos omitidos/incompletos o `identity_enabled: null`
+se consideran desconocidos y no justifican un ban. Los errores HTTP cancelan el
+resto del ciclo y descartan evidencia previa. Si desaparece `GUILD_TAGS` o no se
+puede confirmar al menos una etiqueta correcta activa, se cancela el ciclo.
+Los reinicios descartan la evidencia: nunca hay un ban inmediato al iniciar.
+Las consultas y la acción no son atómicas en Discord: no se puede garantizar riesgo
+cero si alguien cambia su etiqueta exactamente entre la lectura final y el ban.
+
+Auditoría manual sin baneos: `node scripts/audit-guild-tag.js`.
+Resultados y baneos: `logs/bot.log`, líneas `[guild-tag]`.
+Prueba individual en Railway: configurar `TAG_TEST_USER_ID` y un `TAG_TEST_RUN_ID`
+único antes del despliegue. Solo esa persona recibe un aviso inmediato si las
+consultas confirman que falta la etiqueta y puede banearse. Se conservan los 20
+minutos completos y la revisión final. El identificador se registra en el volumen
+(`guild-tag-tests.json`) para no repetir la prueba al reiniciar.
+Pruebas: `node --test test/guild-tag.test.js`.
+
+La etiqueta se elige en Ajustes de usuario > Perfiles > Etiqueta del servidor.
+Fuentes oficiales:
+- https://docs.discord.com/developers/resources/user#user-object-user-primary-guild
+- https://support.discord.com/hc/en-us/articles/31444248479639-Server-Tags
+(Economía)
+
+`xyb rm 30m texto` crea un recordatorio por DM; admite minutos y horas hasta un
+máximo de 24 horas. También puedes usar `xyb rm list` y `xyb rm remove ID`.
+`xyb deposit` abre el banco visual con bolsillo, capacidad, total y botones para
+depositar o retirar todo o una cantidad exacta. `xyb shop` abre una tienda con
+botones e iconos. El pico cuesta 300 monedas; cada compra posterior lo mejora y
+desbloquea mejores recompensas en `xyb mine`. Se empieza pescando con `xyb fish`.
