@@ -1,5 +1,7 @@
 const quoteCard = require('../lib/quote-card');
 const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
+const logger = require('../logger');
 const activeQuotes = new Map();
 
 async function referencedMessage(message) {
@@ -22,7 +24,15 @@ module.exports = {
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const state = { id, ownerId: user.id, text: content, author, font: 'satoshi', color: 'white', layout: 'wide' };
     activeQuotes.set(id, state);
-    return reply(await payload(state));
+    try {
+      return await reply(await payload(state));
+    } catch (error) {
+      // El quote sigue siendo útil si un CDN o un renderer del host no puede
+      // preparar la imagen. Además deja la causa exacta en el log.
+      logger.error('No pude generar la tarjeta quote', error);
+      activeQuotes.delete(id);
+      return reply({ embeds: [new EmbedBuilder().setColor(0x5865F2).setTitle('❝ Quote').setDescription(`> ${content.slice(0, 1500)}\n\n— **${author.globalName ?? author.username}** · @${author.username}`)] });
+    }
   },
   async handleComponent(interaction) {
     if (!interaction.isStringSelectMenu?.() || !interaction.customId?.startsWith('quote:')) return false;
