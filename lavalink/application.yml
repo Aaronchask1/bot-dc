@@ -17,10 +17,16 @@ lavalink:
 plugins:
   youtube:
     enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
     allowDirectPlaylistIds: true
+    # MUSIC is used to find tracks; the remaining clients are fallbacks for
+    # audio playback when YouTube rejects one of its public endpoints.
     clients:
       - MUSIC
       - ANDROID_VR
+      - WEB
+      - WEBEMBEDDED
 
 metrics:
   prometheus:
