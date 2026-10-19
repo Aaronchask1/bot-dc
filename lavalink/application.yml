@@ -11,22 +11,31 @@ lavalink:
       http: true
       local: false
   plugins:
-    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.3"
+      repository: "https://maven.lavalink.dev/releases"
       snapshot: false
 
 plugins:
-  youtube:
-    enabled: true
-    allowSearch: true
-    allowDirectVideoIds: true
-    allowDirectPlaylistIds: true
-    # MUSIC is used to find tracks; the remaining clients are fallbacks for
-    # audio playback when YouTube rejects one of its public endpoints.
-    clients:
-      - MUSIC
-      - ANDROID_VR
-      - WEB
-      - WEBEMBEDDED
+  lavasrc:
+    # yt-dlp handles searches and YouTube links directly, avoiding the
+    # restricted InnerTube clients used by the older source plugin.
+    providers:
+      - "ytsearch:\"%ISRC%\""
+      - "ytsearch:%QUERY%"
+    sources:
+      spotify: true
+      applemusic: false
+      deezer: false
+      tidal: false
+      ytdlp: true
+    spotify:
+      countryCode: "US"
+      playlistLoadLimit: 6
+      albumLoadLimit: 6
+    ytdlp:
+      path: "/usr/local/bin/yt-dlp"
+      searchLimit: 10
+      playlistLoadLimit: 100
 
 metrics:
   prometheus:
