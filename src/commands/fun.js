@@ -1,4 +1,5 @@
 const socialCard = require('../lib/social-card');
+const { EmbedBuilder } = require('discord.js');
 const choices = ['Sí.', 'No.', 'Probablemente.', 'Mejor no contar con ello.', 'Claro que sí.', 'Pregunta de nuevo más tarde.', 'Las señales apuntan a que sí.'];
 const pick = (items) => items[Math.floor(Math.random() * items.length)];
 const displayName = (person) => String(person?.globalName ?? person?.username ?? 'Usuario').trim();
@@ -22,22 +23,35 @@ function shipResult(left, right) {
 }
 
 module.exports = {
-  name: 'fun', aliases: ['8ball', 'eightball', 'choose', 'elige', 'coinflip', 'moneda', 'ship'], description: '8ball, elegir, moneda o compatibilidad.', usage: 'xyb fun (8ball|choose|coinflip|ship) · también xyb 8ball', guildOnly: false,
+  name: 'fun', aliases: ['8ball', 'eightball', 'choose', 'elige', 'coinflip', 'flip', 'moneda', 'ship'], description: '8ball, elegir, moneda o compatibilidad.', usage: 'xyb fun (8ball|choose|flip|ship) · también xyb 8ball', guildOnly: false,
   slash: { description: 'Herramientas divertidas.', setup(builder) { return builder
     .addStringOption((option) => option.setName('accion').setDescription('8ball, choose, moneda o ship').setRequired(true).addChoices({ name: '8ball', value: '8ball' }, { name: 'Elegir', value: 'choose' }, { name: 'Moneda', value: 'coinflip' }, { name: 'Ship', value: 'ship' }))
     .addStringOption((option) => option.setName('texto').setDescription('Pregunta u opciones separadas por |'))
     .addUserOption((option) => option.setName('usuario1').setDescription('Persona para hacer ship contigo'))
     .addUserOption((option) => option.setName('usuario2').setDescription('Opcional: segunda persona para comparar a dos terceros'));
   } },
-  async execute({ invokedName, args, text, user, isSlash, interaction, message, reply, defer }) {
+  async execute({ invokedName, args, text, user, isSlash, interaction, message, reply, send, defer }) {
     const action = isSlash ? interaction.options.getString('accion', true) : (invokedName === 'fun' ? args.shift()?.toLowerCase() : invokedName);
     const body = isSlash ? (interaction.options.getString('texto') ?? '') : (invokedName === 'fun' ? args.join(' ') : text);
-    if (['8ball', 'eightball'].includes(action)) return reply(body ? `🎱 **Pregunta:** ${body}\n**Respuesta:** ${pick(choices)}` : 'Uso: `xyb 8ball ¿hoy gano?`.');
+    // En comandos de prefijo enviamos el panel al canal, no como una respuesta
+    // anidada al mensaje original. En slash se mantiene la respuesta de interacción.
+    const panel = (payload) => (!isSlash && send ? send(payload) : reply(payload));
+    if (['8ball', 'eightball'].includes(action)) {
+      if (!body) return reply('Uso: `xyb 8ball ¿hoy gano?`.');
+      const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('🎱 Bola mágica XYB')
+        .addFields({ name: '❔ Pregunta', value: body.slice(0, 900) }, { name: '✨ Respuesta', value: pick(choices) })
+        .setFooter({ text: `Consultada por ${user.username} · 🐰 xyb` });
+      return panel({ embeds: [embed], allowedMentions: { parse: [] } });
+    }
     if (['choose', 'elige'].includes(action)) {
       const options = body.split('|').map((item) => item.trim()).filter(Boolean);
-      return reply(options.length >= 2 ? `🎲 Elijo: **${pick(options)}**` : 'Uso: `xyb choose pizza | tacos | ramen`.');
+      if (options.length < 2) return reply('Uso: `xyb choose pizza | tacos | ramen`.');
+      return panel({ embeds: [new EmbedBuilder().setColor(0xFEE75C).setTitle('🎲 Decisión tomada').setDescription(`Entre **${options.length}** opciones, elijo:\n\n# ${pick(options)}`).setFooter({ text: `Pedido por ${user.username}` })] });
     }
-    if (['coinflip', 'moneda'].includes(action)) return reply(`🪙 Salió **${pick(['cara', 'cruz'])}**.`);
+    if (['coinflip', 'flip', 'moneda'].includes(action)) {
+      const result = pick(['Cara', 'Cruz']);
+      return panel({ embeds: [new EmbedBuilder().setColor(0xF1C40F).setTitle('🪙 Lanzamiento de moneda').setDescription(`# ${result}`).setFooter({ text: `Lanzada por ${user.username}` })] });
+    }
     if (action === 'ship') {
       const mentioned = [...(message?.mentions?.users?.values?.() ?? [])];
       const first = isSlash ? interaction.options.getUser('usuario1') : mentioned[0];

@@ -13,7 +13,8 @@ if (!DISCORD_TOKEN || !CLIENT_ID) {
 const commands = [
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Muestra los comandos disponibles.'),
+    .setDescription('Muestra los comandos disponibles.')
+    .addStringOption((option) => option.setName('consulta').setDescription('Categoría o comando (opcional)')),
   new SlashCommandBuilder()
     .setName('server')
     .setDescription('Muestra la información de este servidor.'),

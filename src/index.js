@@ -47,6 +47,7 @@ const depositCommand = require('./commands/deposit');
 const shopCommand = require('./commands/shop');
 const bagCommand = require('./commands/bag');
 const petCommand = require('./commands/pet');
+const gamesCommand = require('./commands/games');
 
 const PREFIX = 'xyb';
 const REPEATED_MESSAGE_LIMIT = 8;
@@ -74,6 +75,11 @@ const KISS_IMAGES = [
   'https://media1.tenor.com/m/6Wd5IsZn8EwAAAAd/anime-kiss.gif',
   'https://media1.tenor.com/m/2u67zOB43esAAAAd/cute-anime.gif',
   'https://media1.tenor.com/m/YMpWjNqGihoAAAAd/anime-girl.gif',
+  'https://conteudo.imguol.com.br/c/entretenimento/6b/2024/11/13/okarun-e-momo-batem-seus-dentes-e-consequentemente-se-beijam-em-dan-da-dan-1731524889868_v2_4x3.png',
+  'https://static.zerochan.net/Gekkan.Shoujo.Nozaki-kun.full.1848998.jpg',
+  'https://megapx-assets.dcard.tw/images/f03ae6cb-ee96-4b89-aa95-ffe660aad1ab/1280.jpeg',
+  'https://i0.hdslb.com/bfs/archive/6a40cf23518888c0aa5346ba9ca659771463d2df.jpg',
+  'https://i.pinimg.com/originals/82/e2/f6/82e2f67624ea537421acd3bee5645cf4.jpg',
 ];
 // El beso devuelto: mismas reglas, nunca repite de la lista de arriba.
 const KISS_GIFT_IMAGES = [
@@ -159,25 +165,49 @@ function helpCommands(category) {
   return [...core, ...extra];
 }
 
+function commandGrid(commands) {
+  const names = commands.map((command) => command.usage.split(/[\s|]/)[0]).filter(Boolean);
+  const columns = 4; const rows = [];
+  for (let index = 0; index < names.length; index += columns) rows.push(names.slice(index, index + columns).map((name) => name.padEnd(15)).join('').trimEnd());
+  return `\`\`\`\n${rows.join('\n')}\n\`\`\``;
+}
+
+function findHelpCommand(query) {
+  const name = String(query ?? '').toLowerCase().trim();
+  const extra = extraCommands.findCommand(name);
+  if (extra) return { name: extra.name, aliases: extra.aliases ?? [], description: extra.description, usage: extra.usage, slash: Boolean(extra.slash), guildOnly: extra.guildOnly !== false };
+  const core = CORE_HELP_COMMANDS.find((command) => command.usage.split(/[\s|]/).includes(name));
+  return core ? { name, aliases: [], description: core.description, usage: `${PREFIX} ${core.usage}`, slash: true, guildOnly: true } : null;
+}
+
 function helpEmbed(category = null) {
   const selected = HELP_CATEGORIES.find((item) => item.id === category);
   const commands = helpCommands(category);
-  const title = selected ? selected.label : '📚 Mis comandos';
+  const title = selected ? `${selected.label} · Comandos` : '📚 Mis comandos';
   const description = selected
-    ? `${selected.description}\n\n${commands.map((command) => `• \`${PREFIX} ${command.usage}\` — ${command.description}`).join('\n')}`
+    ? [`> ${selected.description}`, '', '📖 **Comandos disponibles**', commandGrid(commands), `**Atajos:** ${commands.map((command) => `\`${PREFIX} ${command.usage}\``).join(' · ')}`, `Usa \`${PREFIX} help <comando>\` para ver detalles y ejemplos.`].join('\n')
     : [
-      'Elige una categoría en el menú para ver los comandos y ejemplos.',
+      '> **Menú de ayuda**',
+      `Tengo **${helpCommands().length} comandos** en **${HELP_CATEGORIES.length} categorías** listos para ti.`,
       '',
-      ...HELP_CATEGORIES.map((item) => `• **${item.label}** — ${item.description}`),
+      '📚 **Categorías**',
+      ...HELP_CATEGORIES.map((item) => `• **${item.label}** — ${helpCommands(item.id).length} comandos · ${item.description}`),
       '',
-      `Tengo **${helpCommands().length}** comandos principales listos para usar.`,
+      `Elige una categoría abajo o escribe \`${PREFIX} help <categoría|comando>\`.`,
     ].join('\n');
 
   return new EmbedBuilder()
     .setColor(0xFF8C69)
     .setTitle(title)
     .setDescription(description)
-    .setFooter({ text: `${PREFIX} help [categoría] · Selecciona una categoría abajo · 🐰 xyb` });
+    .setFooter({ text: `${PREFIX} help [categoría|comando] · 🐰 xyb` });
+}
+
+function helpCommandEmbed(command) {
+  const aliases = command.aliases?.length ? command.aliases.map((alias) => `\`${PREFIX} ${alias}\``).join(', ') : 'Sin alias';
+  return new EmbedBuilder().setColor(0xFF8C69).setTitle(`📖 ${PREFIX} ${command.name}`).setDescription(`> ${command.description}`)
+    .addFields({ name: '⌨️ Uso', value: `\`${command.usage}\`` }, { name: '🔁 Alias', value: aliases, inline: true }, { name: '⚙️ Disponible en', value: `${command.slash ? '`/` y prefijo' : 'prefijo'}${command.guildOnly ? ' · servidor' : ''}`, inline: true })
+    .setFooter({ text: `Vuelve con ${PREFIX} help · 🐰 xyb` });
 }
 
 function helpComponents(category = null) {
@@ -190,15 +220,18 @@ function helpComponents(category = null) {
         label: item.label.slice(2), value: item.id, description: item.description, default: item.id === category,
       })),
     ]);
-  return [new ActionRowBuilder().addComponents(menu)];
+  return [new ActionRowBuilder().addComponents(menu), new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('help:home').setLabel('Inicio').setEmoji('🏠').setStyle(ButtonStyle.Secondary).setDisabled(!category),
+    new ButtonBuilder().setCustomId('help:close').setLabel('Cerrar').setEmoji('✖').setStyle(ButtonStyle.Danger),
+  )];
 }
 
 function helpText(category = null) {
   return helpEmbed(category).toJSON().description;
 }
 
-async function sendHelp(target, category = null) {
-  const payload = { embeds: [helpEmbed(category)], components: helpComponents(category) };
+async function sendHelp(target, category = null, command = null) {
+  const payload = { embeds: [command ? helpCommandEmbed(command) : helpEmbed(category)], components: helpComponents(category) };
   if (target.isInteraction) return target.interaction.reply(payload);
   return target.message.reply(payload);
 }
@@ -653,14 +686,13 @@ async function handleMessage(message) {
   }
 
   const normalized = message.content.trim().toLowerCase();
-  const helpMatch = normalized.match(new RegExp(`^${PREFIX}\\s+help(?:\\s+(\\S+))?$`, 'i'));
+  const helpMatch = normalized.match(new RegExp(`^${PREFIX}\\s+help(?:\\s+(.+))?$`, 'i'));
   if (helpMatch) {
-    const category = helpMatch[1] === 'all' ? null : helpMatch[1];
-    if (category && !HELP_CATEGORIES.some((item) => item.id === category)) {
-      await message.reply(`Categoría no encontrada. Usa \`${PREFIX} help\` y elige una del menú.`);
-      return;
-    }
-    await sendHelp({ message }, category);
+    const query = helpMatch[1]?.trim(); const category = query === 'all' ? null : query;
+    const isCategory = !category || HELP_CATEGORIES.some((item) => item.id === category);
+    const command = isCategory ? null : findHelpCommand(category);
+    if (!isCategory && !command) return message.reply(`No encontré ese comando. Usa \`${PREFIX} help\` y elige una categoría.`);
+    await sendHelp({ message }, isCategory ? category : null, command);
     return;
   }
 
@@ -763,6 +795,15 @@ async function handleInteraction(interaction) {
   if (await shopCommand.handleComponent(interaction)) return;
   if (await bagCommand.handleComponent(interaction)) return;
   if (await petCommand.handleComponent(interaction)) return;
+  if (await gamesCommand.handleComponent(interaction)) return;
+  if (interaction.isButton?.() && interaction.customId === 'help:home') {
+    await interaction.update({ embeds: [helpEmbed()], components: helpComponents() });
+    return;
+  }
+  if (interaction.isButton?.() && interaction.customId === 'help:close') {
+    await interaction.update({ content: '📚 Menú de ayuda cerrado.', embeds: [], components: [] });
+    return;
+  }
   if (await tradeCommand.handleComponent(interaction)) return;
   if (await polls.handleComponent(interaction)) return;
   if (await profileCommand.handleComponent(interaction)) return;
@@ -821,7 +862,15 @@ async function handleInteraction(interaction) {
   }
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName === 'help') {
-    await sendHelp({ isInteraction: true, interaction });
+    const query = interaction.options.getString('consulta')?.trim().toLowerCase();
+    const category = !query || query === 'all' ? null : query;
+    const isCategory = !category || HELP_CATEGORIES.some((item) => item.id === category);
+    const command = isCategory ? null : findHelpCommand(category);
+    if (!isCategory && !command) {
+      await interaction.reply({ content: `No encontré ese comando. Usa \`${PREFIX} help\` para ver las categorías.`, flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await sendHelp({ isInteraction: true, interaction }, isCategory ? category : null, command);
     return;
   }
   if (interaction.commandName === 'server') {
