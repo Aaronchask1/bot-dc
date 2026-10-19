@@ -86,6 +86,25 @@ function trackList(result) {
   return [];
 }
 
+async function resolveTracks(node, query) {
+  const identifiers = /^https?:\/\//i.test(query)
+    ? [query]
+    : [`ytsearch:${query}`, `scsearch:${query}`, `spsearch:${query}`];
+
+  for (const identifier of identifiers) {
+    try {
+      const result = await node.rest.resolve(identifier);
+      const tracks = trackList(result);
+      if (tracks.length) return tracks;
+    } catch (error) {
+      // Un proveedor puede estar bloqueado temporalmente; probamos el
+      // siguiente sin hacer fallar el comando completo.
+      logger.warn(`[music] Búsqueda fallida en ${identifier.split(':')[0]}: ${error.message}`);
+    }
+  }
+  return [];
+}
+
 async function play(ctx) {
   const query = ctx.text.trim();
   if (!query) return ctx.fail('Uso: `xyb play canción o enlace`');
@@ -93,15 +112,7 @@ async function play(ctx) {
   if (session.channelId !== voiceChannel(ctx).id) return ctx.fail('Entra al mismo canal de voz que Xyb para controlar la música.');
   const node = playerManager.getIdealNode();
   if (!node) return ctx.fail('El nodo de música aún no está listo. Prueba de nuevo en unos segundos.');
-  const identifier = /^https?:\/\//i.test(query) ? query : `ytsearch:${query}`;
-  let result;
-  try {
-    result = await node.rest.resolve(identifier);
-  } catch (error) {
-    logger.error(`[music] No pude buscar "${query}"`, error);
-    return ctx.fail('No pude buscar esa canción ahora. Inténtalo de nuevo en unos segundos o pega un enlace.');
-  }
-  const tracks = trackList(result);
+  const tracks = await resolveTracks(node, query);
   if (!tracks.length) return ctx.fail('No encontré música con esa búsqueda. Prueba con otro título o enlace.');
   session.queue.push(...tracks);
   const first = tracks[0];
