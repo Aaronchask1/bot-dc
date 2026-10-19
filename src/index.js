@@ -48,6 +48,7 @@ const shopCommand = require('./commands/shop');
 const bagCommand = require('./commands/bag');
 const petCommand = require('./commands/pet');
 const gamesCommand = require('./commands/games');
+const quoteCommand = require('./commands/quote');
 
 const PREFIX = 'xyb';
 const REPEATED_MESSAGE_LIMIT = 8;
@@ -796,6 +797,7 @@ async function handleInteraction(interaction) {
   if (await bagCommand.handleComponent(interaction)) return;
   if (await petCommand.handleComponent(interaction)) return;
   if (await gamesCommand.handleComponent(interaction)) return;
+  if (await quoteCommand.handleComponent(interaction)) return;
   if (interaction.isButton?.() && interaction.customId === 'help:home') {
     await interaction.update({ embeds: [helpEmbed()], components: helpComponents() });
     return;

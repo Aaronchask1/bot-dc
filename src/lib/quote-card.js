@@ -25,24 +25,35 @@ function lines(ctx, text, width) {
   return result;
 }
 function crop(linesToCrop, max) { return linesToCrop.length > max ? [...linesToCrop.slice(0, max - 1), `${linesToCrop[max - 1].slice(0, -1)}…`] : linesToCrop; }
-async function card({ text, author }) {
-  const canvas = createCanvas(900, 560); const ctx = canvas.getContext('2d');
+function drawCover(ctx, image, x, y, width, height) {
+  if (!image) { ctx.fillStyle = '#25252d'; ctx.fillRect(x, y, width, height); return; }
+  const scale = Math.max(width / image.width, height / image.height);
+  const drawWidth = image.width * scale; const drawHeight = image.height * scale;
+  ctx.drawImage(image, x + ((width - drawWidth) / 2), y + ((height - drawHeight) / 2), drawWidth, drawHeight);
+}
+async function card({ text, author, font = 'satoshi', color = 'white', layout = 'wide' }) {
+  const wide = layout === 'wide'; const width = wide ? 1100 : 900; const height = wide ? 560 : 720;
+  const imageWidth = wide ? 470 : width; const textX = wide ? 550 : 76; const textWidth = wide ? 470 : width - 152;
+  const canvas = createCanvas(width, height); const ctx = canvas.getContext('2d');
   const image = await avatar(author);
-  ctx.fillStyle = '#101015'; ctx.fillRect(0, 0, 900, 500);
-  const glow = ctx.createRadialGradient(160, 80, 0, 160, 80, 520); glow.addColorStop(0, '#5865f222'); glow.addColorStop(1, '#10101500'); ctx.fillStyle = glow; ctx.fillRect(0, 0, 900, 500);
-  ctx.fillStyle = '#5865f2'; ctx.font = '700 108px "XYB Quote Roboto"'; ctx.fillText('“', 62, 145);
-  ctx.fillStyle = '#f5f5f7'; ctx.font = '700 42px "XYB Quote Roboto"';
-  const quoteLines = crop(lines(ctx, String(text).trim().slice(0, 900), 760), 6);
-  quoteLines.forEach((line, index) => ctx.fillText(line, 80, 145 + (index * 53)));
-  const authorY = Math.min(465, 180 + (quoteLines.length * 53));
-  ctx.fillStyle = '#292932'; ctx.fillRect(80, authorY - 10, 740, 2);
-  ctx.save(); ctx.beginPath(); ctx.arc(118, authorY + 45, 30, 0, Math.PI * 2); ctx.clip();
-  if (image) ctx.drawImage(image, 88, authorY + 15, 60, 60); else { ctx.fillStyle = '#5865f2'; ctx.fillRect(88, authorY + 15, 60, 60); }
-  ctx.restore();
+  const palette = color === 'purple' ? { bg: '#16121f', ink: '#f5efff', muted: '#b9a9d3', mark: '#c084fc' } : color === 'cream' ? { bg: '#f5efe3', ink: '#24201b', muted: '#796f62', mark: '#bb7c37' } : { bg: '#101015', ink: '#f5f5f7', muted: '#a9a9b5', mark: '#6b6b75' };
+  ctx.fillStyle = palette.bg; ctx.fillRect(0, 0, width, height);
+  if (wide) {
+    drawCover(ctx, image, 0, 0, imageWidth, height);
+    const fade = ctx.createLinearGradient(imageWidth - 115, 0, imageWidth + 80, 0); fade.addColorStop(0, '#00000000'); fade.addColorStop(1, palette.bg); ctx.fillStyle = fade; ctx.fillRect(imageWidth - 115, 0, 195, height);
+  } else { drawCover(ctx, image, 0, 0, width, 260); ctx.fillStyle = '#00000075'; ctx.fillRect(0, 0, width, 260); }
+  const fontFamily = font === 'classic' ? 'serif' : '"XYB Quote Roboto"';
+  const baseY = wide ? 185 : 365;
+  ctx.fillStyle = palette.mark; ctx.font = `700 106px ${fontFamily}`; ctx.fillText('“', textX, baseY - 55);
+  ctx.fillStyle = palette.ink; ctx.font = `700 ${wide ? 45 : 42}px ${fontFamily}`;
+  const quoteLines = crop(lines(ctx, String(text).trim().slice(0, 900), textWidth), wide ? 5 : 5);
+  quoteLines.forEach((line, index) => ctx.fillText(line, textX, baseY + (index * 56)));
+  const authorY = Math.min(height - 120, baseY + (quoteLines.length * 56) + 42);
+  ctx.fillStyle = `${palette.muted}77`; ctx.fillRect(textX, authorY - 15, textWidth, 2);
   const name = String(author?.globalName ?? author?.username ?? 'Usuario').slice(0, 42);
   const handle = `@${String(author?.username ?? author?.id ?? 'usuario').slice(0, 48)}`;
-  ctx.fillStyle = '#ffffff'; ctx.font = '700 25px "XYB Quote Roboto"'; ctx.fillText(name, 166, authorY + 39);
-  ctx.fillStyle = '#a9a9b5'; ctx.font = '400 20px "XYB Quote Roboto"'; ctx.fillText(handle, 166, authorY + 68);
+  ctx.fillStyle = palette.ink; ctx.font = `700 25px ${fontFamily}`; ctx.fillText(`— ${name}`, textX, authorY + 25);
+  ctx.fillStyle = palette.muted; ctx.font = `400 20px ${fontFamily}`; ctx.fillText(handle, textX, authorY + 55);
   const file = 'quote.png'; const attachment = new AttachmentBuilder(canvas.toBuffer('image/png'), { name: file });
   return { embeds: [new EmbedBuilder().setColor(0x5865F2).setImage(`attachment://${file}`).setFooter({ text: '🐰 xyb quote' })], files: [attachment], allowedMentions: { parse: [] } };
 }
