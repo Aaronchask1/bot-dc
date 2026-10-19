@@ -61,7 +61,18 @@ async function getSession(ctx) {
   if (!playerManager) { await ctx.fail('El servidor de música aún está iniciando. Inténtalo en unos segundos.'); return null; }
   let session = currentSession(ctx.guild.id);
   if (session) return session;
-  const player = await playerManager.joinVoiceChannel({ guildId: ctx.guild.id, channelId: channel.id, shardId: ctx.guild.shardId ?? 0, deaf: true });
+  if (!playerManager.getIdealNode()) {
+    await ctx.fail('El servidor de música se está conectando. Inténtalo de nuevo en unos segundos.');
+    return null;
+  }
+  let player;
+  try {
+    player = await playerManager.joinVoiceChannel({ guildId: ctx.guild.id, channelId: channel.id, shardId: ctx.guild.shardId ?? 0, deaf: true });
+  } catch (error) {
+    logger.error('[music] No pude entrar al canal de voz', error);
+    await ctx.fail('No pude entrar al canal de voz todavía. Espera unos segundos y prueba otra vez.');
+    return null;
+  }
   session = { player, channelId: channel.id, queue: [], current: null, repeat: false };
   sessions.set(ctx.guild.id, session); installPlayerEvents(session);
   return session;
@@ -83,7 +94,13 @@ async function play(ctx) {
   const node = playerManager.getIdealNode();
   if (!node) return ctx.fail('El nodo de música aún no está listo. Prueba de nuevo en unos segundos.');
   const identifier = /^https?:\/\//i.test(query) ? query : `ytsearch:${query}`;
-  const result = await node.rest.resolve(identifier);
+  let result;
+  try {
+    result = await node.rest.resolve(identifier);
+  } catch (error) {
+    logger.error(`[music] No pude buscar "${query}"`, error);
+    return ctx.fail('No pude buscar esa canción ahora. Inténtalo de nuevo en unos segundos o pega un enlace.');
+  }
   const tracks = trackList(result);
   if (!tracks.length) return ctx.fail('No encontré música con esa búsqueda. Prueba con otro título o enlace.');
   session.queue.push(...tracks);
