@@ -1,5 +1,4 @@
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const { Transform, PassThrough } = require('stream');
@@ -31,8 +30,8 @@ function resolveFfmpeg() {
     if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
 
     // En Linux (Railway/Docker) conviene el ffmpeg del sistema: el binario
-    // empaquetado por @ffmpeg-installer es de 2018 y puede fallar con URLs
-    // modernas de YouTube. En Windows se usa el instalador si no hay ffmpeg.
+    // empaquetado por @ffmpeg-installer es de 2018 y puede fallar con streams
+    // modernos. En Windows se usa el instalador si no hay ffmpeg.
     try {
         const probe = spawnSync('ffmpeg', ['-version'], {
             windowsHide: true,
@@ -63,98 +62,13 @@ function isUrl(text) {
     return /^https?:\/\//i.test(text);
 }
 
-let base64CookiesPath = null;
-let base64CookiesValue = null;
-
-function looksLikeNetscapeCookies(text) {
-    if (typeof text !== 'string' || !text.trim()) return false;
-
-    const lines = text.split(/\r?\n/);
-    const hasHeader = lines.some((line) => /^# (Netscape )?HTTP Cookie File/i.test(line.trim()));
-    if (!hasHeader) return false;
-
-    return lines.some((line) => {
-        if (!line || line.trim().startsWith('#')) return false;
-        const fields = line.split('\t');
-        return fields.length >= 7 && fields[0].trim() && fields[5].trim();
-    });
-}
-
-/**
- * Railway/Render no permiten subir archivos: acepta el cookies.txt en Base64.
- * Se valida antes de escribirlo para no pasarle basura a yt-dlp.
- */
-function cookiesFromBase64() {
-    const encoded = String(process.env.YTDLP_COOKIES_B64 || '').trim();
-    if (!encoded) return null;
-
-    if (base64CookiesPath && base64CookiesValue === encoded && fs.existsSync(base64CookiesPath)) {
-        return base64CookiesPath;
-    }
-
-    const compact = encoded.replace(/\s+/g, '');
-    if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(compact) || compact.length % 4 === 1) {
-        console.error('[yt-dlp] YTDLP_COOKIES_B64 no es Base64 válido; se ignora. Debe ser el contenido de cookies.txt codificado, no el comando que lo genera.');
-        return null;
-    }
-
-    try {
-        const normalized = compact.replace(/-/g, '+').replace(/_/g, '/');
-        const decoded = Buffer.from(normalized, 'base64').toString('utf8');
-
-        if (!looksLikeNetscapeCookies(decoded)) {
-            console.error('[yt-dlp] YTDLP_COOKIES_B64 no contiene un cookies.txt de Netscape válido; se ignora.');
-            return null;
-        }
-
-        const directory = path.join(os.tmpdir(), 'xyb-bot');
-        fs.mkdirSync(directory, { recursive: true });
-
-        const target = path.join(directory, 'cookies.txt');
-        fs.writeFileSync(target, decoded, { mode: 0o600 });
-
-        base64CookiesPath = target;
-        base64CookiesValue = encoded;
-        return target;
-    } catch (error) {
-        console.error('[yt-dlp] No pude decodificar YTDLP_COOKIES_B64:', error.message);
-        return null;
-    }
-}
-
-function cookieArgs() {
-    const custom = process.env.YTDLP_COOKIES;
-    const file = custom || path.join(BIN_DIR, '..', 'cookies.txt');
-
-    if (fs.existsSync(file)) {
-        try {
-            const text = fs.readFileSync(file, 'utf8');
-            if (looksLikeNetscapeCookies(text)) return ['--cookies', path.resolve(file)];
-            console.error(`[yt-dlp] El archivo de cookies ${file} no tiene formato Netscape; se ignora.`);
-        } catch (error) {
-            console.error('[yt-dlp] No pude leer el archivo de cookies:', error.message);
-        }
-    }
-
-    const base64File = cookiesFromBase64();
-    if (base64File) {
-        return ['--cookies', base64File];
-    }
-
-    if (process.env.YTDLP_COOKIES_FROM_BROWSER) {
-        return ['--cookies-from-browser', process.env.YTDLP_COOKIES_FROM_BROWSER];
-    }
-
-    return [];
-}
-
 function classifyError(error) {
     const message = error?.message || '';
 
-    if (/Sign in to confirm|not a bot|confirm your age|age.?restricted|login required|private video|members-only/i.test(message)) {
-        error.code = 'YOUTUBE_AUTH';
+    if (/DRM protected|DRM/i.test(message)) {
+        error.code = 'DRM';
     } else if (/403|Forbidden/i.test(message)) {
-        error.code = 'YOUTUBE_403';
+        error.code = 'FORBIDDEN';
     }
 
     return error;
@@ -204,62 +118,150 @@ function run(args, { timeout = 60_000 } = {}) {
 }
 
 function normalize(entry) {
+    const url = entry.webpage_url || entry.original_url || entry.url || null;
+
     return {
-        id: entry.id,
-        title: entry.title || 'Desconocido',
-        url: entry.webpage_url || entry.url || `https://www.youtube.com/watch?v=${entry.id}`,
+        id: entry.id || url,
+        title: entry.title || entry.track || 'Desconocido',
+        url,
         duration: Number.isFinite(entry.duration) ? entry.duration : null,
         thumbnail: entry.thumbnail || entry.thumbnails?.at(-1)?.url || null,
-        uploader: entry.uploader || entry.channel || 'Desconocido',
+        uploader: entry.uploader || entry.channel || entry.artist || entry.artists?.join(', ') || 'Desconocido',
         isLive: entry.is_live === true || entry.live_status === 'is_live'
     };
 }
 
-/**
- * Resuelve una búsqueda o una URL a una lista de pistas.
- */
-async function search(query, { limit = 1 } = {}) {
-    const target = isUrl(query) ? query : `ytsearch${limit}:${query}`;
+function normalizeSoundCloud(entry) {
+    const track = normalize(entry);
+    return {
+        ...track,
+        id: `sc:${entry.id || track.url}`,
+        url: track.url,
+        source: 'soundcloud'
+    };
+}
 
-    const args = [
+function isDrmError(error) {
+    return error?.code === 'DRM' || /DRM protected/i.test(error?.message || '');
+}
+
+function normalizeForMatch(text) {
+    return String(text || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+}
+
+function titleMatches(candidate, expected) {
+    const left = normalizeForMatch(candidate);
+    const right = normalizeForMatch(expected);
+    if (!left || !right) return true;
+    return left.includes(right) || right.includes(left);
+}
+
+function noPlayableError(message) {
+    const error = new Error(message);
+    error.code = 'NO_PLAYABLE';
+    return error;
+}
+
+/**
+ * Busca en SoundCloud y devuelve la primera versión que yt-dlp puede abrir.
+ * Se prueba cada resultado porque las pistas oficiales suelen tener DRM.
+ */
+async function searchSoundCloud(query, { limit = 10, probe = true, minDuration = 20, probeTimeout = 20_000, expectedTitle = null } = {}) {
+    const target = `scsearch${Math.min(Math.max(Math.round(limit), 1), 30)}:${query}`;
+    const raw = await run([
         '-J',
         '--no-warnings',
         '--no-progress',
         '--no-playlist',
         '--flat-playlist',
-        ...cookieArgs(),
         target
-    ];
+    ]);
 
-    const raw = await run(args);
     const json = JSON.parse(raw);
+    const entries = (json.entries || [json]).filter(Boolean);
+    const candidates = entries
+        .map(normalizeSoundCloud)
+        .filter((track) => track.url && (!track.duration || track.duration >= minDuration))
+        .filter((track) => !expectedTitle || titleMatches(track.title, expectedTitle));
 
-    if (json.entries) {
-        return json.entries.filter(Boolean).map(normalize);
+    if (!candidates.length) {
+        throw noPlayableError('No encontré una versión que coincida en SoundCloud.');
     }
 
-    return [normalize(json)];
+    if (!probe) return candidates;
+
+    let nonDrmCandidate = null;
+
+    for (const track of candidates) {
+        if (!track.url) continue;
+
+        try {
+            track.directUrl = await extractDirectUrl(track.url, { timeout: probeTimeout });
+            return [track];
+        } catch (error) {
+            if (process.env.MUSIC_DEBUG) {
+                console.error(`[SoundCloud] ${track.title}: ${error.message}`);
+            }
+
+            // Un fallo de red no significa que la pista sea inútil. Si no
+            // aparece ninguna versión válida, se intentará abrir esta después.
+            if (!isDrmError(error) && !nonDrmCandidate) nonDrmCandidate = track;
+        }
+    }
+
+    if (nonDrmCandidate) return [nonDrmCandidate];
+
+    throw noPlayableError('Las versiones encontradas en SoundCloud tienen DRM. Prueba con otro nombre o enlace.');
+}
+
+async function resolveSoundCloudUrl(url) {
+    const raw = await run([
+        '-J',
+        '--no-warnings',
+        '--no-progress',
+        '--no-playlist',
+        url
+    ]);
+
+    const json = JSON.parse(raw);
+    const entry = (json.entries || [json]).filter(Boolean)[0];
+
+    if (!entry) {
+        throw noPlayableError('No pude leer esa canción de SoundCloud.');
+    }
+
+    const track = normalizeSoundCloud(entry);
+    track.url = track.url || url;
+
+    try {
+        track.directUrl = await extractDirectUrl(url, { timeout: 30_000 });
+    } catch (error) {
+        if (isDrmError(error)) {
+            throw noPlayableError('Esa versión de SoundCloud tiene DRM. Prueba con otro enlace.');
+        }
+        throw error;
+    }
+
+    return track;
 }
 
 /**
- * Obtiene la URL directa del audio (googlevideo).
+ * Obtiene la URL directa del audio de una pista de SoundCloud.
  */
-const FALLBACK_CLIENTS = ['android', 'android_vr'];
-
-async function extractDirectUrl(url, client = null) {
-    const args = [
+async function extractDirectUrl(url, { timeout = 45_000 } = {}) {
+    const raw = await run([
         '-g',
-        '-f', 'bestaudio[acodec=opus]/bestaudio/best',
+        '-f', 'bestaudio/best',
         '--no-playlist',
         '--no-warnings',
-        '--no-progress'
-    ];
-
-    if (client) args.push('--extractor-args', `youtube:player_client=${client}`);
-
-    args.push(...cookieArgs(), url);
-
-    const raw = await run(args, { timeout: 45_000 });
+        '--no-progress',
+        url
+    ], { timeout });
 
     const candidate = raw
         .split('\n')
@@ -273,38 +275,23 @@ async function extractDirectUrl(url, client = null) {
     return candidate;
 }
 
-async function getDirectUrl(url) {
-    try {
-        return await extractDirectUrl(url);
-    } catch (error) {
-        // Si el cliente web está bloqueado, probamos clientes alternativos.
-        if (error.code !== 'YOUTUBE_AUTH' && error.code !== 'YOUTUBE_403') throw error;
-
-        let lastError = error;
-
-        for (const client of FALLBACK_CLIENTS) {
-            try {
-                return await extractDirectUrl(url, client);
-            } catch (fallbackError) {
-                lastError = fallbackError;
-            }
-        }
-
-        throw lastError;
-    }
+async function getDirectUrl(url, options = {}) {
+    return extractDirectUrl(url, options);
 }
 
 function startTranscoder(directUrl, { seek = 0, bitrateKbps = DEFAULT_BITRATE, volume = 1 } = {}) {
     return new Promise((resolve, reject) => {
         const bitrate = clampBitrate(bitrateKbps);
         const gain = Math.min(Math.max(Number(volume) || 0, 0), 2);
+        const referer = /soundcloud\.(?:com|cloud)|sndcdn\.com/i.test(directUrl)
+            ? 'https://soundcloud.com/'
+            : null;
 
         const args = [
             '-hide_banner',
             '-loglevel', 'error',
             '-nostdin',
             '-user_agent', USER_AGENT,
-            '-referer', 'https://www.youtube.com/',
             '-reconnect', '1',
             '-reconnect_streamed', '1',
             '-reconnect_delay_max', '5',
@@ -312,6 +299,8 @@ function startTranscoder(directUrl, { seek = 0, bitrateKbps = DEFAULT_BITRATE, v
             '-analyzeduration', '1000000',
             '-probesize', '1048576'
         ];
+
+        if (referer) args.push('-referer', referer);
 
         if (seek > 0) args.push('-ss', String(seek));
 
@@ -413,7 +402,7 @@ function startTranscoder(directUrl, { seek = 0, bitrateKbps = DEFAULT_BITRATE, v
 
 /**
  * Abre el audio y entrega un stream Ogg/Opus con prebuffer.
- * Reintenta una vez con una URL fresca si YouTube devuelve 403.
+ * Reintenta una vez con una URL fresca si la CDN devuelve 403 o expira.
  */
 async function openStream(url, { seek = 0, bitrateKbps = DEFAULT_BITRATE, volume = 1, directUrl = null } = {}) {
     let lastError;
@@ -421,7 +410,7 @@ async function openStream(url, { seek = 0, bitrateKbps = DEFAULT_BITRATE, volume
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-            const direct = cachedUrl || await getDirectUrl(url);
+            const direct = cachedUrl || await getDirectUrl(url, { timeout: 30_000 });
             return await startTranscoder(direct, { seek, bitrateKbps, volume });
         } catch (error) {
             lastError = error;
@@ -437,7 +426,8 @@ async function openStream(url, { seek = 0, bitrateKbps = DEFAULT_BITRATE, volume
 
 module.exports = {
     YTDLP,
-    search,
+    searchSoundCloud,
+    resolveSoundCloudUrl,
     openStream,
     getDirectUrl,
     isUrl,

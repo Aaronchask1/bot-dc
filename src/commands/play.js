@@ -6,8 +6,9 @@ const ERRORS = {
     NOPERMS: '❌ No tengo permisos para conectarme o hablar en ese canal.',
     NOCONNECTION: '❌ No pude conectarme al canal de voz.',
     NORESULTS: '❌ No encontré resultados para esa búsqueda.',
-    YOUTUBE_AUTH: '❌ YouTube pide iniciar sesión para ese video. Guarda `cookies.txt` y reinicia el bot.',
-    YOUTUBE_403: '❌ YouTube bloqueó el audio. Prueba de nuevo en unos segundos.'
+    NO_PLAYABLE: '❌ No encontré una versión reproducible en SoundCloud. Prueba con otro nombre o enlace.',
+    DRM: '❌ Esa versión de SoundCloud tiene DRM. Prueba con otra versión.',
+    UNSUPPORTED_URL: '❌ YouTube está desactivado. Usa el nombre de la canción o un enlace de SoundCloud.'
 };
 
 async function respond(ctx, waiting, content) {
@@ -18,16 +19,16 @@ async function respond(ctx, waiting, content) {
 module.exports = {
     name: 'play',
     aliases: ['p', 'tocar', 'reproducir'],
-    description: 'Reproduce una canción de YouTube en tu canal de voz.',
-    usage: 'xyb play <canción o URL>',
+    description: 'Reproduce una canción de SoundCloud en tu canal de voz.',
+    usage: 'xyb play <canción o URL de SoundCloud>',
     guildOnly: true,
     botPermissions: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak],
     slash: {
-        description: 'Reproduce una canción de YouTube en tu canal de voz.',
+        description: 'Reproduce una canción de SoundCloud en tu canal de voz.',
         setup(builder) {
             return builder.addStringOption((option) => option
                 .setName('busqueda')
-                .setDescription('Nombre, artista o URL de YouTube.')
+                .setDescription('Nombre, artista o URL de SoundCloud.')
                 .setRequired(true)
                 .setMaxLength(200));
         }

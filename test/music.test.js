@@ -7,6 +7,7 @@ const path = require('node:path');
 process.env.XYB_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'xyb-music-'));
 
 const ytdlp = require('../src/music/ytdlp');
+const soundcloud = require('../src/music/soundcloud');
 const music = require('../src/music/manager');
 const { findCommand } = require('../src/commands');
 
@@ -53,6 +54,16 @@ test('detecta URLs y rechaza búsquedas', () => {
   assert.equal(ytdlp.isUrl('https://www.youtube.com/watch?v=abc'), true);
   assert.equal(ytdlp.isUrl('http://ejemplo.com'), true);
   assert.equal(ytdlp.isUrl('bad bunny'), false);
+});
+
+test('solo acepta enlaces de SoundCloud para reproducir', async () => {
+  assert.equal(soundcloud.isSoundCloudUrl('https://soundcloud.com/t3relemento/rafa-caro'), true);
+  assert.equal(soundcloud.isSoundCloudUrl('https://www.youtube.com/watch?v=abc'), false);
+
+  await assert.rejects(
+    music.resolveTrack('https://www.youtube.com/watch?v=abc'),
+    (error) => error.code === 'UNSUPPORTED_URL'
+  );
 });
 
 test('sin canal de voz, play falla antes de tocar la red', async () => {

@@ -1,13 +1,14 @@
 # 🎵 Música
 
-Reproductor directo de YouTube (sin Lavalink ni Spotify). Usa `yt-dlp` para resolver
-el audio y FFmpeg para entregar **Ogg/Opus** a `@discordjs/voice`.
+Reproductor directo desde **SoundCloud** (sin YouTube, Lavalink, cookies ni
+credenciales de Spotify). Usa `yt-dlp` para resolver el audio, iTunes solo para
+mejorar la búsqueda y FFmpeg para entregar **Ogg/Opus** a `@discordjs/voice`.
 
 ## Comandos
 
 | Comando | Alias | Qué hace |
 | --- | --- | --- |
-| `xyb play <canción o URL>` | `p`, `tocar`, `reproducir` | Busca y reproduce; si ya hay algo, lo pone en cola. |
+| `xyb play <canción o URL>` | `p`, `tocar`, `reproducir` | Busca en SoundCloud y reproduce; si ya hay algo, lo pone en cola. |
 | `xyb pause` | `pausa`, `pausar` | Pausa. |
 | `xyb resume` | `reanudar`, `continuar` | Continúa. |
 | `xyb skip` | `saltar`, `next` | Salta a la siguiente. |
@@ -16,7 +17,7 @@ el audio y FFmpeg para entregar **Ogg/Opus** a `@discordjs/voice`.
 | `xyb stop` | `detener`, `disconnect` | Detiene, vacía la cola y sale del canal. |
 | `xyb volume [0-200]` | `vol`, `v` | Muestra o cambia el volumen. |
 | `xyb mb ...` | `musicbrainz`, `meta` | Metadatos: grabaciones, artistas, álbumes y `mb now`. |
-| `xyb ytm ...` | `ytmusic`, `ytplaylist` | Playlists de YouTube Music. |
+| `xyb ytm ...` | `ytmusic`, `ytplaylist` | Extra opcional de YouTube Music; no se usa para reproducir. |
 
 Todos tienen versión slash (`/play`, `/queue`, etc.). Se registran con
 `npm run register`.
@@ -29,14 +30,13 @@ Todos tienen versión slash (`/play`, `/queue`, etc.). Se registran con
   npm run ytdlp
   ```
   En Linux se descarga `bin/yt-dlp`; en Docker se instala en `/usr/local/bin`.
-- **FFmpeg**: lo aporta `@ffmpeg-installer/ffmpeg` (viene con `npm install`).
-  También puedes definir `FFMPEG_PATH`.
-- **Python + ytmusicapi** (opcional, para mejores búsquedas y playlists):
+- **FFmpeg**: en Railway/Docker se usa el del sistema (`/usr/bin/ffmpeg`). En
+  Windows se usa `@ffmpeg-installer/ffmpeg` o la ruta de `FFMPEG_PATH`.
+- **Python + ytmusicapi** (solo para los comandos `ytm`, opcionales):
   ```bash
   py -m venv python/.venv
   python/.venv/Scripts/pip install ytmusicapi
   ```
-  Si no está, el bot busca con `yt-dlp` y todo lo demás sigue funcionando.
 
 ## Configuración
 
@@ -45,69 +45,48 @@ En `.env`:
 ```env
 MUSIC_BITRATE=64       # 32-128 kbps
 MUSIC_VOLUME=100       # 0-200 %
+ITUNES_COUNTRY=US      # opcional: US, MX, ES...
 YTDLP_PATH=            # opcional
 FFMPEG_PATH=           # opcional
-YTMUSIC_PYTHON=        # opcional
-YTDLP_COOKIES=         # opcional, ruta a cookies.txt
+YTMUSIC_PYTHON=        # opcional, solo para ytm
 ```
 
 El volumen se guarda por servidor y se aplica **en caliente**: al cambiarlo, el
 bot reabre el audio en la posición actual (pausa breve de 1-2 s).
 
+## Cómo busca
+
+1. Si escribes un nombre, iTunes devuelve el título y artista más probables.
+   Por ejemplo, `cara quintero` se convierte en `Rafa Caro T3r Elemento`.
+2. Se buscan varias versiones en SoundCloud.
+3. Se prueba cada una con `yt-dlp -g`; las pistas oficiales con DRM se saltan
+   automáticamente y se usa la primera versión que sí se puede abrir.
+4. Si no hay ninguna versión válida, se intenta de nuevo con el texto original.
+
+Las URLs de YouTube se rechazan: el bot solo acepta nombres o enlaces de
+SoundCloud.
+
 ## Audio
 
 - Salida **Opus 48 kHz estéreo a 64 kbps** por defecto.
-- Se resuelve la URL directa (`yt-dlp -g`), se conecta con `-reconnect` y se
-  **prebufferean ~256 KB** antes de empezar para evitar cortes.
-- Si YouTube bloquea el cliente web, se reintenta automáticamente con los
-  clientes `android` y `android_vr`, y una vez más con URL fresca si hay 403.
+- SoundCloud suele entregar HLS (`.m3u8`); FFmpeg lo convierte a Ogg/Opus.
+- Se **prebufferean ~256 KB** antes de empezar para evitar cortes.
+- Si una URL de CDN expira o devuelve 403, se pide una nueva y se reintenta una
+  vez.
 - El canal de voz debe tener un bitrate de al menos 64 kbps para la calidad
   pedida.
 
-## Videos restringidos (cookies)
+## Si una canción no se reproduce
 
-YouTube puede pedir iniciar sesión:
+- SoundCloud puede tener la versión oficial protegida con DRM. El bot busca
+  otras subidas de la misma canción; si ninguna funciona, prueba con el nombre
+  del artista o pega otro enlace de SoundCloud.
+- No se necesitan cookies, cuenta de YouTube ni datos del navegador.
 
-```
-Sign in to confirm you're not a bot
-```
+## YouTube Music (opcional)
 
-El fallback `android` suele evitarlo. Si un video sigue fallando:
-
-1. Instala en Chrome la extensión **Get cookies.txt LOCALLY**.
-2. Con tu cuenta iniciada en YouTube, exporta las cookies de `youtube.com`.
-3. Guarda el archivo como `cookies.txt` en la raíz de este proyecto.
-4. Reinicia el bot.
-
-También puedes usar `YTDLP_COOKIES=C:\ruta\a\cookies.txt`.
-
-En Railway/Render no puedes subir archivos: pega el contenido de `cookies.txt`
-codificado en Base64 en `YTDLP_COOKIES_B64`. El bot lo decodifica a un archivo
-temporal la primera vez que reproduce.
-
-> En Windows, `--cookies-from-browser chrome` no funciona con Chrome reciente
-> (App-Bound Encryption). Usa `cookies.txt` o Firefox:
-> `YTDLP_COOKIES_FROM_BROWSER=firefox`.
->
-> `cookies.txt` da acceso a tu cuenta: no lo compartas ni lo subas a Git.
-
-## YouTube Music (playlists)
-
-Las búsquedas funcionan sin cuenta. Para crear/añadir/listar playlists hace falta
-autenticación:
-
-```bash
-npm run ytmusic          # OAuth (recomendado)
-npm run ytmusic -- browser
-```
-
-Se genera `python/oauth.json` (ignorado por Git). Comprueba con `xyb ytm status`.
-
-- `xyb ytm create <nombre> | <búsqueda>` → crea una playlist con 5 canciones.
-- `xyb ytm add <id o URL> | <búsqueda>` → añade 5 canciones.
-- `xyb ytm save <nombre>` → guarda la canción actual y la cola.
-- `xyb ytm list` → tus playlists.
-- `xyb ytm status` → si hay autenticación.
+Los comandos `ytm` siguen disponibles como extra para playlists, pero **no
+intervienen en `play`**. Si no los usas, no hace falta configurar nada.
 
 ## MusicBrainz
 
@@ -131,7 +110,7 @@ Incluye pruebas de bitrate, volumen, alias, formato de duración y carga de
 comandos. Para probar el audio real (requiere red):
 
 ```bash
-node -e "const y=require('./src/music/ytdlp');(async()=>{const s=await y.openStream('https://www.youtube.com/watch?v=N50oc4pgo8w');s.stream.once('data',d=>{console.log(d.subarray(0,4).toString(),s.bitrate);s.kill();process.exit(0)})})()"
+node -e "const y=require('./src/music/ytdlp');(async()=>{const s=await y.openStream('https://soundcloud.com/edgar-martinez-arellano/rafa-caro-grupo-efectivo');s.stream.once('data',d=>{console.log(d.subarray(0,4).toString(),s.bitrate);s.kill();process.exit(0)})})()"
 ```
 
 Debe imprimir `OggS 64`.
@@ -140,4 +119,4 @@ Debe imprimir `OggS 64`.
 
 El `Dockerfile` instala `yt-dlp`, Python, `ytmusicapi` y FFmpeg. Define
 `DISCORD_TOKEN`, `CLIENT_ID` y, si quieres playlists, sube `python/oauth.json`
-como secreto o volumen. `cookies.txt` también puede montarse como volumen.
+como secreto o volumen. No se necesitan cookies ni archivos del navegador.

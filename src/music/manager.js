@@ -12,7 +12,8 @@ const {
 
 const { EmbedBuilder } = require('discord.js');
 const ytdlp = require('./ytdlp');
-const ytmusic = require('./ytmusic');
+const soundcloud = require('./soundcloud');
+const itunes = require('./itunes');
 
 const LEAVE_DELAY_MS = 2 * 60 * 1000;
 
@@ -270,11 +271,11 @@ async function announce(session, track) {
         const embed = new EmbedBuilder()
             .setColor('#1DB954')
             .setAuthor({ name: '🎶 Reproduciendo ahora' })
-            .setTitle(track.title.slice(0, 256))
-            .setURL(track.url)
+            .setTitle(String(track.title).slice(0, 256))
             .setDescription(`**${track.uploader}**\n\`${formatDuration(track.duration)}\``)
             .setFooter({ text: `Pedido por ${track.requestedBy}` });
 
+        if (track.url) embed.setURL(track.url);
         if (track.thumbnail) embed.setThumbnail(track.thumbnail);
 
         await channel.send({ embeds: [embed] });
@@ -303,7 +304,7 @@ async function startTrack(guildId, track, { seek = 0, keepPaused = false, silent
             seek,
             bitrateKbps: session.bitrateKbps,
             volume: session.volume,
-            directUrl: cachedUrl
+            directUrl: cachedUrl || track.directUrl || null
         });
 
         if (token !== session.loadToken || !sessions.has(guildId)) {
@@ -339,13 +340,10 @@ async function startTrack(guildId, track, { seek = 0, keepPaused = false, silent
         session.playStartedAt = null;
 
         if (!silent) {
-            if (error.code === 'YOUTUBE_AUTH') {
-                notify(session,
-                    `⚠️ YouTube pide iniciar sesión para **${track.title}** (video restringido).\n` +
-                    '> Guarda cookies de YouTube en `cookies.txt` y reinicia el bot. Ver `MUSICA.md`.'
-                );
-            } else if (error.code === 'YOUTUBE_403') {
-                notify(session, `⚠️ YouTube bloqueó el audio de **${track.title}**. Prueba de nuevo en unos segundos.`);
+            if (error.code === 'NO_PLAYABLE' || error.code === 'DRM') {
+                notify(session, `⚠️ No pude reproducir **${track.title}**: ${error.message}`);
+            } else {
+                notify(session, `⚠️ No pude reproducir **${track.title}**. Prueba con otra versión o enlace.`);
             }
         }
 
@@ -374,23 +372,72 @@ function playNext(guildId) {
 }
 
 async function resolveTrack(query) {
-    if (!ytdlp.isUrl(query)) {
+    const text = String(query || '').trim();
+
+    if (ytdlp.isUrl(text)) {
+        if (!soundcloud.isSoundCloudUrl(text)) {
+            throw soundcloud.unsupportedUrlError();
+        }
+
+        return soundcloud.resolveUrl(text);
+    }
+
+    // iTunes solo aporta título/artista para acertar con la búsqueda. El audio
+    // siempre sale de SoundCloud; YouTube no interviene.
+    let metadata = [];
+    try {
+        metadata = await itunes.search(text, { limit: 1 });
+    } catch (error) {
+        console.error('[MUSIC] iTunes no respondió, se busca el texto original:', error.message);
+    }
+
+    const title = metadata[0]?.title;
+    const artist = metadata[0]?.artist;
+    const attempts = [];
+
+    // El título solo suele encontrar subidas de usuarios; añadir el artista
+    // puede dejar únicamente la versión oficial con DRM.
+    if (title) attempts.push({ query: title, expectedTitle: title });
+    if (title && artist) attempts.push({ query: `${title} ${artist}`, expectedTitle: title });
+    if (!attempts.some((attempt) => attempt.query.toLowerCase() === text.toLowerCase())) {
+        attempts.push({ query: text, expectedTitle: null });
+    }
+
+    let results = [];
+    let lastError = null;
+
+    for (const attempt of attempts) {
         try {
-            const results = await ytmusic.search(query, { limit: 1 });
-            if (results.length) return results[0];
+            results = await soundcloud.search(attempt.query, {
+                limit: 10,
+                expectedTitle: attempt.expectedTitle
+            });
+            if (results.length) break;
         } catch (error) {
-            console.error('[MUSIC] YouTube Music falló, usando yt-dlp:', error.message);
+            lastError = error;
+            if (error.code !== 'NO_PLAYABLE') throw error;
         }
     }
 
-    const results = await ytdlp.search(query, { limit: 1 });
     if (!results.length) {
+        if (lastError?.code === 'NO_PLAYABLE') throw lastError;
+
         const error = new Error('No encontré resultados para esa búsqueda.');
         error.code = 'NORESULTS';
         throw error;
     }
 
-    return results[0];
+    const track = results[0];
+
+    if (!track.thumbnail && metadata[0]?.thumbnail) {
+        track.thumbnail = metadata[0].thumbnail;
+    }
+
+    if (!track.duration && metadata[0]?.duration) {
+        track.duration = metadata[0].duration;
+    }
+
+    return track;
 }
 
 async function enqueue(source, query) {
