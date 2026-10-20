@@ -2,7 +2,7 @@ const { createStore } = require('../store');
 const profiles = require('./profiles');
 
 const store = createStore('economy');
-const COOLDOWNS = { work: 5 * 60_000, fish: 5 * 60_000, mine: 15 * 60_000, daily: 24 * 60 * 60_000 };
+const COOLDOWNS = { work: 5 * 60_000, fish: 5 * 60_000, mine: 5 * 60_000, daily: 24 * 60 * 60_000 };
 const FISH = [
   ['🐟 Pez común', 18], ['🐠 Pez tropical', 32], ['🦐 Camarón', 25], ['🦑 Calamar', 45],
   ['🐡 Pez globo', 60], ['🦈 Tiburón pequeño', 120], ['🐋 Tesoro del océano', 250],
@@ -37,16 +37,24 @@ const ROD_UPGRADES = [
   { level: 4, name: '🎣 Caña legendaria', price: 7_500, risk: 0, description: 'Sin riesgo de accidente al pescar.' },
 ];
 const SHOP = {
-  bait: { name: '🪱 Carnada premium', price: 120, sell: 60, description: '+25% monedas al pescar una vez.' },
-  rod: { name: '🎣 Caña reforzada', price: 900, sell: 450, description: 'Compra y mejora tu caña para reducir accidentes.' },
-  insurance: { name: '🛡️ Seguro de bolsillo', price: 350, sell: 175, description: 'Evita una pérdida al morir una vez.' },
-  pickaxe: { name: '⛏️ Pico de piedra', price: 300, sell: 0, description: 'Desbloquea `xyb mine`; se puede mejorar cinco veces.' },
-  bank: { name: '🏦 Bolsa bancaria I', price: 500, sell: 0, description: 'Aumenta la capacidad de tu banco.' },
-  egg: { name: '🥚 Huevo misterioso', price: 750, sell: 375, description: 'Incúbalo con `xyb pet hatch` para obtener una mascota.' },
-  apple: { name: '🍎 Manzana', price: 45, sell: 22, description: 'Alimenta a tu mascota: +10 XP.' },
-  banana: { name: '🍌 Banana', price: 75, sell: 37, description: 'Alimenta a tu mascota: +18 XP.' },
-  strawberry: { name: '🍓 Fresa', price: 125, sell: 62, description: 'Alimenta a tu mascota: +30 XP.' },
-  cake: { name: '🍰 Pastel de cumpleaños', price: 260, sell: 130, description: 'Alimenta a tu mascota: +60 XP.' },
+  bait: { id: 701, name: '🪱 Carnada premium', price: 120, sell: 60, description: '+25% monedas al pescar una vez.' },
+  rod: { id: 512, name: '🎣 Caña reforzada', price: 900, sell: 450, description: 'Compra y mejora tu caña para reducir accidentes.' },
+  insurance: { id: 305, name: '🛡️ Seguro de bolsillo', price: 350, sell: 175, description: 'Evita una pérdida al morir una vez.' },
+  pickaxe: { id: 508, name: '⛏️ Pico de piedra', price: 300, sell: 0, description: 'Desbloquea `xyb mine`; se puede mejorar cinco veces.' },
+  bank: { id: 600, name: '🏦 Bolsa bancaria I', price: 500, sell: 0, description: 'Aumenta la capacidad de tu banco.' },
+  egg: { id: 750, name: '🥚 Huevo misterioso', price: 750, sell: 375, description: 'Incúbalo con `xyb pet hatch` para obtener una mascota.' },
+  apple: { id: 321, name: '🍎 Manzana', price: 45, sell: 22, description: 'Alimenta a tu mascota: +10 XP.' },
+  banana: { id: 322, name: '🍌 Banana', price: 75, sell: 37, description: 'Alimenta a tu mascota: +18 XP.' },
+  strawberry: { id: 323, name: '🍓 Fresa', price: 125, sell: 62, description: 'Alimenta a tu mascota: +30 XP.' },
+  cake: { id: 11, name: '🍰 Pastel de cumpleaños', price: 260, sell: 130, description: 'Alimenta a tu mascota: +60 XP.' },
+};
+const SHOP_ALIASES = {
+  pico: 'pickaxe', pica: 'pickaxe', pick: 'pickaxe', herramienta: 'pickaxe',
+  cana: 'rod', caña: 'rod', pesca: 'rod',
+  carnada: 'bait', cebo: 'bait', seguro: 'insurance',
+  banco: 'bank', bolsa: 'bank', huevo: 'egg', manzana: 'apple',
+  banana: 'banana', platano: 'banana', plátano: 'banana', fresa: 'strawberry',
+  pastel: 'cake', torta: 'cake',
 };
 const key = (guildId, userId) => `${guildId}:${userId}`;
 const choose = (items) => items[Math.floor(Math.random() * items.length)];
@@ -90,21 +98,32 @@ function risk(record, activity) {
 function pickaxeForLevel(level) { return PICKAXE_UPGRADES[Math.max(0, Math.min(PICKAXE_UPGRADES.length - 1, level - 1))] ?? null; }
 function bankLevelFor(record) { return Math.max(0, Math.min(BANK_UPGRADES.length, Number(record.bankLevel) || 0)); }
 function rodLevelFor(record) { return Math.max(0, Math.min(ROD_UPGRADES.length, Number(record.rodLevel) || (record.inventory?.rod ? 1 : 0))); }
+function resolveItem(value) {
+  const raw = String(value ?? '').trim().toLowerCase().replace(/^['"`]|['"`]$/g, '');
+  if (!raw) return null;
+  if (SHOP[raw]) return raw;
+  if (SHOP_ALIASES[raw]) return SHOP_ALIASES[raw];
+  const numeric = Number(raw);
+  if (Number.isSafeInteger(numeric)) return Object.entries(SHOP).find(([, item]) => item.id === numeric)?.[0] ?? null;
+  return Object.entries(SHOP).find(([, item]) => item.name.toLowerCase().includes(raw))?.[0] ?? null;
+}
 function productFor(item, record = { pickaxeLevel: 0 }) {
+  item = resolveItem(item);
+  if (!item) return null;
   if (item === 'bank') {
     const current = bankLevelFor(record);
-    if (current >= BANK_UPGRADES.length) return { ...BANK_UPGRADES.at(-1), item, maxed: true, description: 'Nivel máximo alcanzado.' };
-    return { ...BANK_UPGRADES[current], item, description: `Mejora tu banco del nivel ${current} al ${current + 1}.` };
+    if (current >= BANK_UPGRADES.length) return { ...BANK_UPGRADES.at(-1), id: SHOP.bank.id, item, maxed: true, description: 'Nivel máximo alcanzado.' };
+    return { ...BANK_UPGRADES[current], id: SHOP.bank.id, item, description: `Mejora tu banco del nivel ${current} al ${current + 1}.` };
   }
   if (item === 'rod') {
     const current = rodLevelFor(record);
-    if (current >= ROD_UPGRADES.length) return { ...ROD_UPGRADES.at(-1), item, maxed: true, description: 'Nivel máximo alcanzado.' };
-    return { ...ROD_UPGRADES[current], item, description: current ? `Mejora tu caña del nivel ${current} al ${current + 1}.` : ROD_UPGRADES[0].description };
+    if (current >= ROD_UPGRADES.length) return { ...ROD_UPGRADES.at(-1), id: SHOP.rod.id, item, maxed: true, description: 'Nivel máximo alcanzado.' };
+    return { ...ROD_UPGRADES[current], id: SHOP.rod.id, item, description: current ? `Mejora tu caña del nivel ${current} al ${current + 1}.` : ROD_UPGRADES[0].description };
   }
   if (item !== 'pickaxe') return SHOP[item] ?? null;
   const current = Number(record.pickaxeLevel) || 0;
-  if (current >= PICKAXE_UPGRADES.length) return { ...PICKAXE_UPGRADES.at(-1), item, maxed: true, description: 'Nivel máximo alcanzado.' };
-  return { ...PICKAXE_UPGRADES[current], item, description: current ? `Mejora tu pico del nivel ${current} al ${current + 1}.` : SHOP.pickaxe.description };
+  if (current >= PICKAXE_UPGRADES.length) return { ...PICKAXE_UPGRADES.at(-1), id: SHOP.pickaxe.id, item, maxed: true, description: 'Nivel máximo alcanzado.' };
+  return { ...PICKAXE_UPGRADES[current], id: SHOP.pickaxe.id, item, description: current ? `Mejora tu pico del nivel ${current} al ${current + 1}.` : SHOP.pickaxe.description };
 }
 function shopProducts(record) { return Object.fromEntries(Object.keys(SHOP).map((item) => [item, productFor(item, record)])); }
 function claim(guildId, userId, action, now = Date.now()) {
@@ -157,6 +176,7 @@ function withdraw(guildId, userId, value) {
   record.bank -= coins; record.wallet += coins; save(guildId, userId, record); return { ok: true, coins, capacity: bankCapacity(guildId, userId), record };
 }
 function buy(guildId, userId, item) {
+  item = resolveItem(item);
   const record = get(guildId, userId); const product = productFor(item, record); if (!product) return null;
   if (['pickaxe', 'bank', 'rod'].includes(item) && product.maxed) return { ok: false, reason: 'max', record, product };
   if (record.wallet < product.price) return { ok: false, record, product };
@@ -175,6 +195,7 @@ function buy(guildId, userId, item) {
   record.wallet -= product.price; addItem(record, item); save(guildId, userId, record); return { ok: true, record, product };
 }
 function sell(guildId, userId, item, value = 'all') {
+  item = resolveItem(item) ?? item;
   const record = get(guildId, userId);
   if (item === 'fish' || item === 'peces') {
     const count = Object.values(record.fish).reduce((sum, amount) => sum + amount, 0);
@@ -206,4 +227,4 @@ function leaderboard(guildId, limit = 10) {
     .map(([id, value]) => ({ userId: id.slice(guildId.length + 1), ...get(guildId, id.slice(guildId.length + 1)), ...value }))
     .sort((a, b) => total(b) - total(a)).slice(0, limit);
 }
-module.exports = { COOLDOWNS, MINE_ORES, PICKAXE_UPGRADES, BANK_UPGRADES, ROD_UPGRADES, SHOP, get, total, remaining, relative, bankCapacity, bankLevelFor, rodLevelFor, claim, deposit, withdraw, transfer, buy, sell, exchange, leaderboard, mine: (guildId, userId, now = Date.now()) => claim(guildId, userId, 'mine', now), productFor, shopProducts, store };
+module.exports = { COOLDOWNS, MINE_ORES, PICKAXE_UPGRADES, BANK_UPGRADES, ROD_UPGRADES, SHOP, SHOP_ALIASES, resolveItem, get, total, remaining, relative, bankCapacity, bankLevelFor, rodLevelFor, claim, deposit, withdraw, transfer, buy, sell, exchange, leaderboard, mine: (guildId, userId, now = Date.now()) => claim(guildId, userId, 'mine', now), productFor, shopProducts, store };

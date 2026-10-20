@@ -73,6 +73,20 @@ test('el pico cuesta 300, se mejora y habilita mine', () => {
   assert.equal(view.components[0].toJSON().components.length, 5);
 });
 
+test('la economía acepta IDs y aliases de tienda, con los tres cooldowns a 5 minutos', () => {
+  assert.equal(economy.COOLDOWNS.work, 5 * 60_000);
+  assert.equal(economy.COOLDOWNS.fish, 5 * 60_000);
+  assert.equal(economy.COOLDOWNS.mine, 5 * 60_000);
+  assert.equal(economy.resolveItem('508'), 'pickaxe');
+  assert.equal(economy.resolveItem('pica'), 'pickaxe');
+  assert.equal(economy.resolveItem('321'), 'apple');
+  const guildId = `ids-${Date.now()}`; const userId = 'u1';
+  const record = economy.get(guildId, userId); record.wallet = 1_000; economy.store.set(`${guildId}:${userId}`, record);
+  assert.equal(economy.buy(guildId, userId, '508').ok, true);
+  assert.equal(economy.buy(guildId, userId, '321').ok, true);
+  assert.match(shop.catalog(guildId, userId).embeds[0].toJSON().description, /ID: `508`/);
+});
+
 test('la tienda permite mejorar capacidad del banco y niveles de caña', () => {
   const guildId = `upgrades-${Date.now()}`;
   const userId = 'u1';
