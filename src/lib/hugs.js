@@ -5,23 +5,14 @@ const {
   EmbedBuilder,
   MessageFlags,
 } = require('discord.js');
-const socialCard = require('./social-card');
-const animeMedia = require('./anime-media');
+const interactionGifs = require('./interaction-gifs');
 
-// Abrazos de anime revisados a ojo, todos de 500 px para que se vean grandes.
-const HUG_IMAGES = [
-  'https://i.imgur.com/wOmoeF8.gif',
-  'https://i.imgur.com/BPLqSJC.gif',
-  'https://i.imgur.com/Avih7pz.gif',
-  'https://i.imgur.com/pa0R1t5.gif',
-  'https://media.tenor.com/nw8fKxblWeYAAAAe/gochiusa-chino-kafuu.png',
-  'https://media.tenor.com/TJuvig1CFBQAAAAe/the-pet-girl-of-sakurasou-sakurasou-no-pet-na-kanojo.png',
-  'https://betteranime.files.wordpress.com/2015/06/0191.png?h=576&w=1024',
-  'https://image.idntimes.com/post/20230313/vlcsnap-2023-03-13-19h05m47s024-3b221a05a8f4eb1fcd1879ca12e22200-bf5d3c46eb91cdadaa3c4e572c890d31.png',
-];
+// Abrazos GIF revisados a ojo. El pool se amplía en segundo plano con el
+// proveedor SFW, pero estos respaldos siempre están disponibles.
+const HUG_IMAGES = [...interactionGifs.FALLBACK_GIFS.hug];
 
 function randomImage() {
-  return animeMedia.pick('hug', HUG_IMAGES);
+  return interactionGifs.randomGif('hug');
 }
 
 function embed(text) {
@@ -57,7 +48,13 @@ async function handleComponent(interaction) {
   const [from, to] = await Promise.all([
     interaction.client.users.fetch(fromId), interaction.client.users.fetch(toId),
   ]);
-  await interaction.reply(await socialCard.card({ left: to, right: from, title: 'ABRAZO DEVUELTO', subtitle: `${to.username} le devuelve el abrazo a ${from.username}`, badge: '🫂', color: '#9ad9a0', file: 'hug-back.png' }));
+  const payload = interactionGifs.payloadFor({
+    action: 'hug',
+    user: to,
+    target: from,
+    description: `**${interactionGifs.plainName(to)}** le devuelve el abrazo a **${interactionGifs.plainName(from)}**`,
+  });
+  await interaction.reply(payload);
   try {
     await interaction.message.edit({ components: [] });
   } catch { /* si el mensaje ya no está, no es problema */ }

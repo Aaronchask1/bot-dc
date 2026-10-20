@@ -1,22 +1,59 @@
-const socialCard = require('../lib/social-card');
+const interactionGifs = require('../lib/interaction-gifs');
 
-const ACTIONS = {
-  pat: 'da unas palmaditas a', slap: 'da una bofetada a', poke: 'pica a',
-  wave: 'saluda a', dance: 'baila con', highfive: 'choca los cinco con', bonk: 'da un bonk a',
-};
+const ACT_ACTIONS = Object.fromEntries(
+  Object.entries(interactionGifs.ACTIONS).filter(([name]) => name !== 'hug'),
+);
+const ACT_ALIASES = Object.fromEntries(
+  Object.entries(interactionGifs.ACTION_ALIASES).filter(([, action]) => ACT_ACTIONS[action]),
+);
+const ACTION_NAMES = Object.keys(ACT_ACTIONS);
+
+function normalizeAction(raw) {
+  const name = String(raw ?? '').toLowerCase();
+  if (ACT_ACTIONS[name]) return name;
+  return ACT_ALIASES[name] ?? null;
+}
 
 module.exports = {
-  name: 'act', aliases: Object.keys(ACTIONS), description: 'Interacciones: hug, pat, slap, poke, wave, dance, highfive y bonk.', usage: 'xyb act pat @persona | xyb pat @persona', guildOnly: true, resolveMember: true,
-  slash: { description: 'Haz una interacción con alguien.', setup(builder) { return builder
-    .addStringOption((option) => option.setName('accion').setDescription('Acción').setRequired(true).addChoices(...Object.keys(ACTIONS).map((name) => ({ name, value: name }))))
-    .addUserOption((option) => option.setName('usuario').setDescription('Persona')); } },
+  name: 'act',
+  aliases: [...ACTION_NAMES, ...Object.keys(ACT_ALIASES)],
+  description: `Interacciones con GIF: ${ACTION_NAMES.join(', ')}.`,
+  usage: 'xyb act <acción> [persona] | xyb slap @persona | xyb hi',
+  guildOnly: true,
+  resolveMember: true,
+  // Para `xyb act slap csr`, el nombre que hay que buscar es "csr", no
+  // "slap csr". En los alias directos (`xyb slap csr`) se usa todo el texto.
+  targetArgs(args, invokedName) {
+    return invokedName === 'act' ? args.slice(1).join(' ') : args.join(' ');
+  },
+  slash: {
+    description: 'Haz una interacción con alguien usando un GIF.',
+    setup(builder) {
+      return builder
+        .addStringOption((option) => option
+          .setName('accion')
+          .setDescription('Acción')
+          .setRequired(true)
+          .addChoices(...ACTION_NAMES.map((name) => ({ name, value: name }))))
+        .addUserOption((option) => option
+          .setName('usuario')
+          .setDescription('Persona (opcional para saludos y acciones en solitario)'));
+    },
+  },
+
   async execute({ invokedName, args, target, user, isSlash, interaction, reply, fail, defer }) {
-    const action = isSlash ? interaction.options.getString('accion', true) : (invokedName === 'act' ? args.shift()?.toLowerCase() : invokedName);
-    if (!ACTIONS[action]) return fail(`Acciones: ${Object.keys(ACTIONS).join(', ')}.`);
-    const person = isSlash ? (interaction.options.getUser('usuario') ?? user) : (target ?? user);
+    const raw = isSlash
+      ? interaction.options.getString('accion', true)
+      : (invokedName === 'act' ? args.shift() : invokedName);
+    const action = normalizeAction(raw);
+    if (!action) return fail(`Acciones: ${ACTION_NAMES.join(', ')}.`);
+
+    const person = isSlash
+      ? (interaction.options.getUser('usuario') ?? user)
+      : (target ?? user);
     if (person.bot) return fail('Esa interacción es solo para personas.');
-    const object = person.id === user.id ? 'sí mismo/a' : person.username;
+
     if (isSlash) await defer();
-    await reply(await socialCard.card({ left: user, right: person, title: action.toUpperCase(), subtitle: `${user.username} ${ACTIONS[action]} ${object}`, badge: action === 'bonk' ? '💥' : '✨', color: action === 'slap' || action === 'bonk' ? '#ff746c' : '#ff9cc4', file: `${action}.png` }));
+    await reply(interactionGifs.payloadFor({ action, user, target: person }));
   },
 };

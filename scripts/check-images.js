@@ -46,7 +46,9 @@ function jpegSize(buffer) {
 
 async function measure(url) {
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; XYB/1.0; +https://discord.com)' },
+    });
     if (!response.ok) return { url, error: response.status };
     const buffer = Buffer.from(await response.arrayBuffer());
     const size = gifSize(buffer) ?? pngSize(buffer) ?? jpegSize(buffer);
@@ -61,7 +63,13 @@ async function main() {
   let small = 0;
 
   for (const [name, { images, minWidth }] of Object.entries(pools)) {
-    const results = await Promise.all(images.map(measure));
+    const results = [];
+    // El CDN de los GIF de interacciones devuelve 428 si recibe demasiadas
+    // descargas a la vez. Una por una tarda un poco más, pero mide de verdad.
+    for (const url of images) {
+      results.push(await measure(url));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
     const sized = results.filter((result) => result.size);
     const tooSmall = sized.filter((result) => result.size.width < minWidth);
     broken += results.filter((result) => result.error).length;

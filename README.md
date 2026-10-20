@@ -21,6 +21,7 @@ Base inicial del bot privado de Discord.
 - `xyb welcome`: panel con botones para configurar la bienvenida (canal, mensaje, título, footer, color, imagen, thumbnail, mención y embed). `xyb welcomevars` lista las variables y `xyb welcometest` la prueba.
 - `xyb steal`: crea un sticker en el servidor a partir de un emoji o de un PNG/APNG/Lottie.
 - Comunidad: `xyb afk`, `xyb remind`, `xyb poll`, `xyb suggest`, `xyb act` y utilidades `xyb 8ball`, `xyb choose`, `xyb coinflip` y `xyb ship`. Al vencer, `xyb remind` te menciona en el mismo canal del servidor donde lo creaste.
+- Interacciones con GIF: `xyb hug`, `xyb slap`, `xyb hi`, `xyb highfive`, `xyb pat`, `xyb cuddle`, `xyb poke`, `xyb wave`, `xyb dance`, `xyb bonk`, `xyb bite`, `xyb lick`, `xyb handhold`, `xyb feed`, `xyb heal`, `xyb blush`, `xyb cry` y `xyb laugh`. Cada acción elige un GIF acorde al contexto, con respaldos locales si el proveedor falla.
 - Mascotas: compra un `🥚 Huevo misterioso` en `xyb shop`, incúbalo con `xyb pet hatch [nombre]` y cuídalo con frutas, pastel, juego y limpieza para ganar niveles.
 - Música: `xyb play <canción o URL de YouTube/SoundCloud>` (también `/play`), `pause`, `resume`, `skip`, `queue`, `np`, `stop` y `volume 0-200`. YouTube es la fuente principal y SoundCloud el respaldo; usa yt-dlp + FFmpeg, sin cookies ni Lavalink. Detalles en [`MUSICA.md`](MUSICA.md).
 - Metadatos: `xyb mb` (MusicBrainz) y playlists de YouTube Music con `xyb ytm`.
@@ -39,7 +40,7 @@ playlists de YouTube Music, ejecuta `npm run ytmusic` una vez (ver `MUSICA.md`).
 
 Nunca compartas el token de Discord ni lo subas a GitHub.
 
-Comprobaciones: `npm test` (candado anti-duplicados y guardia de repeticiones) y `npm run check:images` (que las imágenes de los besos sigan en pie). Todo lo que pasa se queda anotado en `logs/bot.log`.
+Comprobaciones: `npm test` (candado anti-duplicados y guardia de repeticiones) y `npm run check:images` (que las imágenes de los besos y los GIF de interacción sigan en pie). Todo lo que pasa se queda anotado en `logs/bot.log`.
 
 ## Comandos añadidos después
 
@@ -58,6 +59,10 @@ Viven en `src/commands/`, se cargan solos al arrancar y también se registran co
 | `xyb welcomevars` | Variables disponibles: `{{user}}`, `{{username}}`, `{{tag}}`, `{{id}}`, `{{server}}`, `{{members}}`, `{{count}}`. |
 | `xyb welcometest` | Muestra cómo quedaría la bienvenida. |
 | `xyb steal` (`rob`) | Convierte un emoji o imagen en sticker del servidor. |
+| `xyb hug` (`abrazo`, `abraza`) | Abrazo con GIF y botón para devolverlo. |
+| `xyb act <acción>` (`slap`, `hi`, `pat`, `cuddle`, `handhold`...) | Interacciones con GIF al estilo Nekotina. También funcionan como alias directos: `xyb slap @persona`, `xyb hi`. |
+
+Las acciones y los textos están inspirados en la página oficial de rol de [Nekotina](https://nekotina.com/en/modules/roleplay). Cada comando elige un GIF acorde al contexto (cariñoso, divertido o de saludo); si el proveedor externo falla, se usa una lista local de respaldo para que el comando nunca se quede sin imagen.
 
 Permisos que hacen falta:
 

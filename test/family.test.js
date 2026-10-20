@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 process.env.XYB_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'xyb-family-'));
+process.env.XYB_GIFS_OFFLINE = '1';
 
 const marriage = require('../src/lib/marriage');
 const { findCommand, listCommands } = require('../src/commands');
@@ -84,10 +85,28 @@ test('los comandos nuevos están registrados con lo que pediste', () => {
   assert.equal(findCommand('mute'), null, 'mute sigue en index.js');
 });
 
-test('los abrazos usan imágenes grandes de anime', () => {
+test('las interacciones nuevas viven en act y tienen alias', () => {
+  for (const nombre of ['slap', 'hi', 'highfive', 'pat', 'cuddle', 'poke', 'wave', 'dance', 'bonk', 'bite', 'lick', 'handhold', 'feed', 'heal', 'blush', 'cry', 'laugh']) {
+    assert.equal(findCommand(nombre)?.name, 'act', `falta ${nombre}`);
+  }
+  assert.equal(findCommand('hola').name, 'act');
+  assert.equal(findCommand('cachetada').name, 'act');
+});
+
+test('act busca a la persona después del nombre de la acción', () => {
+  const act = findCommand('act');
+  assert.equal(act.targetArgs(['slap', 'csr'], 'act'), 'csr');
+  assert.equal(act.targetArgs(['csr'], 'slap'), 'csr');
+  assert.equal(act.targetArgs(['hi'], 'act'), '');
+});
+
+test('los abrazos usan GIFs de anime', () => {
   const { HUG_IMAGES } = require('../src/lib/hugs');
   assert.ok(HUG_IMAGES.length >= 3);
-  for (const url of HUG_IMAGES) assert.ok(url.startsWith('https://'), url);
+  for (const url of HUG_IMAGES) {
+    assert.ok(url.startsWith('https://'), url);
+    assert.match(url, /\.gif($|\?)/, url);
+  }
   assert.equal(new Set(HUG_IMAGES).size, HUG_IMAGES.length, 'sin repetidas');
 });
 

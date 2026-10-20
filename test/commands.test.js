@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 process.env.XYB_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'xyb-e2e-'));
+process.env.XYB_GIFS_OFFLINE = '1';
 
 const { Collection, ChannelType } = require('discord.js');
 const { listCommands } = require('../src/commands');
@@ -299,7 +300,7 @@ test('unban all espera el aviso si no puede consultar los baneos', async () => {
   assert.match(String(replies[0]), /No pude ver la lista de baneados/);
 });
 
-test('xyb hug responde con imagen y botón de vuelta', async () => {
+test('xyb hug responde con GIF y botón de vuelta', async () => {
   const { findCommand } = require('../src/commands');
   const { context, replies } = makeContext({
     target: { id: 'u2', username: 'csr', tag: 'csr#2', toString: () => '<@961823716273176698>' },
@@ -308,9 +309,55 @@ test('xyb hug responde con imagen y botón de vuelta', async () => {
   await findCommand('hug').execute(context);
   assert.equal(replies.length, 1);
   const embed = replies[0].embeds[0].toJSON();
-  assert.ok(embed.image?.url, 'debe llevar imagen');
+  assert.match(embed.image?.url ?? '', /\.gif($|\?)/, 'debe llevar un GIF');
   const boton = replies[0].components[0].toJSON().components[0];
   assert.equal(boton.custom_id, 'hug:back:u1:u2');
+});
+
+test('xyb hug sin mención también manda un GIF de autoabrazo', async () => {
+  const { findCommand } = require('../src/commands');
+  const { context, replies } = makeContext();
+
+  await findCommand('hug').execute(context);
+  const embed = replies[0].embeds[0].toJSON();
+  assert.match(embed.description, /akira.*se abraza a sí mismo/);
+  assert.match(embed.image?.url ?? '', /\.gif($|\?)/);
+  assert.deepEqual(replies[0].components, []);
+});
+
+test('xyb slap usa un GIF y menciona a la persona', async () => {
+  const { findCommand } = require('../src/commands');
+  const { context, replies } = makeContext({
+    target: { id: 'u2', username: 'csr', tag: 'csr#2', toString: () => '<@961823716273176698>' },
+  });
+  context.invokedName = 'slap';
+
+  await findCommand('slap').execute(context);
+  const embed = replies[0].embeds[0].toJSON();
+  assert.match(embed.description, /akira.*cachetada.*csr/);
+  assert.match(embed.image?.url ?? '', /\.gif($|\?)/);
+});
+
+test('xyb hi saluda al servidor cuando no hay objetivo', async () => {
+  const { findCommand } = require('../src/commands');
+  const { context, replies } = makeContext();
+  context.invokedName = 'hi';
+
+  await findCommand('hi').execute(context);
+  const embed = replies[0].embeds[0].toJSON();
+  assert.match(embed.description, /akira.*saluda al servidor/);
+  assert.match(embed.image?.url ?? '', /\.gif($|\?)/);
+});
+
+test('xyb hola funciona como alias de hi y usa el GIF de saludo', async () => {
+  const { findCommand } = require('../src/commands');
+  const { context, replies } = makeContext();
+  context.invokedName = 'hola';
+
+  await findCommand('hola').execute(context);
+  const embed = replies[0].embeds[0].toJSON();
+  assert.match(embed.description, /saluda al servidor/);
+  assert.equal(replies[0].components.length, 0);
 });
 
 test('xyb marry manda la propuesta con aceptar y rechazar, sin casar a nadie', async () => {

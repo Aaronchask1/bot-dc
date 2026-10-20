@@ -587,7 +587,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   // work from being blocked by an image provider.
   animeMedia.warm({
     kiss: KISS_IMAGES, kiss_return: KISS_GIFT_IMAGES, kiss_reject: KISS_REJECT_IMAGES,
-    hug: hugs.HUG_IMAGES, proposal: marriageProps.PROPOSE_IMAGES,
+    proposal: marriageProps.PROPOSE_IMAGES,
     marriage_accept: marriageProps.ACCEPT_IMAGES, marriage_reject: marriageProps.REJECT_IMAGES,
   });
   reminders.start(readyClient);
