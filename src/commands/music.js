@@ -3,6 +3,7 @@ const { Connectors, LoadType, Shoukaku } = require('shoukaku');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const logger = require('../logger');
+const { canonicalize } = require('../music/catalog');
 
 const execFileAsync = promisify(execFile);
 
@@ -111,7 +112,16 @@ async function resolveWithYtDlp(query) {
 
 async function resolveTracks(node, query) {
   const isUrl = /^https?:\/\//i.test(query);
-  const identifiers = isUrl ? [query] : [`ytsearch:${query}`, `scsearch:${query}`, `spsearch:${query}`];
+  let searchQuery = query;
+  if (!isUrl) {
+    try {
+      const match = await canonicalize(query);
+      if (match) searchQuery = match.query;
+    } catch (error) {
+      logger.warn(`[music] MusicBrainz no respondió; continuo con la búsqueda original: ${error.message}`);
+    }
+  }
+  const identifiers = isUrl ? [query] : [`ytsearch:${searchQuery}`, `scsearch:${searchQuery}`];
 
   for (const identifier of identifiers) {
     try {
@@ -126,7 +136,7 @@ async function resolveTracks(node, query) {
   }
 
   if (!isUrl) {
-    const url = await resolveWithYtDlp(query);
+    const url = await resolveWithYtDlp(searchQuery);
     if (url) {
       try {
         const tracks = trackList(await node.rest.resolve(url));

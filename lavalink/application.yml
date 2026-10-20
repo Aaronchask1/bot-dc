@@ -23,19 +23,11 @@ plugins:
       - "ytsearch:\"%ISRC%\""
       - "ytsearch:%QUERY%"
     sources:
-      spotify: true
+      spotify: false
       applemusic: false
       deezer: false
       tidal: false
       ytdlp: true
-    spotify:
-      # Railway inyecta estas variables protegidas en el servicio de audio.
-      # Nunca se almacenan las claves en el repositorio.
-      clientId: ${SPOTIFY_CLIENT_ID:}
-      clientSecret: ${SPOTIFY_CLIENT_SECRET:}
-      countryCode: "US"
-      playlistLoadLimit: 6
-      albumLoadLimit: 6
     ytdlp:
       path: "/usr/local/bin/yt-dlp"
       searchLimit: 10
