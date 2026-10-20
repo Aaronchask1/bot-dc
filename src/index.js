@@ -124,6 +124,7 @@ const HELP_CATEGORIES = [
   { id: 'comunidad', label: '🎉 Comunidad', description: 'AFK, encuestas, recordatorios y sugerencias.' },
   { id: 'economia', label: '💰 Economía y mascotas', description: 'Trabajo, pesca, banco, tienda y mascotas.' },
   { id: 'diversion', label: '🎲 Diversión', description: 'Suerte, trivia, minijuegos y texto divertido.' },
+  { id: 'musica', label: '🎵 Música', description: 'Reproducción, cola y controles de voz.' },
   { id: 'servidor', label: '⚙️ Servidor', description: 'Bienvenida, prefijos, roles y automatizaciones.' },
   { id: 'moderacion', label: '🛡️ Moderación', description: 'Limpieza y acciones de moderación.' },
 ];
@@ -147,7 +148,7 @@ const EXTRA_COMMAND_CATEGORIES = {
   hug: 'social', marry: 'social', wife: 'social', divorce: 'social', act: 'social',
   img: 'perfil', avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil', quote: 'perfil', profile: 'perfil',
   afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad',
-  fun: 'diversion', games: 'diversion',
+  fun: 'diversion', games: 'diversion', play: 'musica',
   balance: 'economia', work: 'economia', fish: 'economia', mine: 'economia', daily: 'economia', bank: 'economia', deposit: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia', pet: 'economia',
   add: 'servidor', autoresponder: 'servidor', autoreact: 'servidor', prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
   purge: 'moderacion', unban: 'moderacion', rol: 'moderacion', steal: 'moderacion',
