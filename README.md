@@ -22,7 +22,7 @@ Base inicial del bot privado de Discord.
 - `xyb steal`: crea un sticker en el servidor a partir de un emoji o de un PNG/APNG/Lottie.
 - Comunidad: `xyb afk`, `xyb remind`, `xyb poll`, `xyb suggest`, `xyb act` y utilidades `xyb 8ball`, `xyb choose`, `xyb coinflip` y `xyb ship`. Al vencer, `xyb remind` te menciona en el mismo canal del servidor donde lo creaste.
 - Mascotas: compra un `🥚 Huevo misterioso` en `xyb shop`, incúbalo con `xyb pet hatch [nombre]` y cuídalo con frutas, pastel, juego y limpieza para ganar niveles.
-- Música: `xyb play <canción o URL>` (también `/play`), `pause`, `resume`, `skip`, `queue`, `np`, `stop` y `volume 0-200`. Reproductor directo con yt-dlp + FFmpeg, sin Lavalink. Detalles en [`MUSICA.md`](MUSICA.md).
+- Música: `xyb play <canción o URL de SoundCloud>` (también `/play`), `pause`, `resume`, `skip`, `queue`, `np`, `stop` y `volume 0-200`. Reproductor directo desde SoundCloud con yt-dlp + FFmpeg, sin YouTube, cookies ni Lavalink. Detalles en [`MUSICA.md`](MUSICA.md).
 - Metadatos: `xyb mb` (MusicBrainz) y playlists de YouTube Music con `xyb ytm`.
 
 ## Preparación
