@@ -24,23 +24,29 @@ async function findTrack(query) {
 }
 function openStream(url) {
   const ytdlp = spawn(process.env.YTDLP_PATH || 'yt-dlp', ['-f', 'bestaudio/best', '--no-playlist', '--no-warnings', '--no-progress', '-o', '-', url]);
-  const ffmpeg = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1']);
+  const ffmpeg = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'ogg', 'pipe:1']);
+  let lastError = '';
   ytdlp.stdout.pipe(ffmpeg.stdin);
-  ytdlp.on('error', (error) => logger.error('[music] No pude iniciar yt-dlp', error));
-  ffmpeg.on('error', (error) => logger.error('[music] No pude iniciar FFmpeg', error));
-  return { stream: ffmpeg.stdout, stop: () => { ytdlp.kill('SIGKILL'); ffmpeg.kill('SIGKILL'); } };
+  ytdlp.stderr.on('data', (data) => { lastError = String(data).trim().split('\n').slice(-2).join(' '); });
+  ytdlp.on('error', (error) => { lastError = error.message; ffmpeg.stdin.destroy(); logger.error('[music] No pude iniciar yt-dlp', error); });
+  ffmpeg.on('error', (error) => { lastError = error.message; logger.error('[music] No pude iniciar FFmpeg', error); });
+  ytdlp.on('close', () => { if (!ffmpeg.stdin.destroyed) ffmpeg.stdin.end(); });
+  return { stream: ffmpeg.stdout, stop: () => { ytdlp.kill('SIGKILL'); ffmpeg.kill('SIGKILL'); }, getLastError: () => lastError };
 }
 function destroyStream(session) { try { session.stream?.stop(); } catch {} session.stream = null; }
-function advance(session) { destroyStream(session); const track = session.queue.shift(); if (!track) { session.current = null; return; } session.current = track; session.stream = openStream(track.url); session.player.play(createAudioResource(session.stream.stream, { inputType: StreamType.Raw })); }
+function advance(session) { destroyStream(session); const track = session.queue.shift(); if (!track) { session.current = null; return; } session.current = track; session.stream = openStream(track.url); session.player.play(createAudioResource(session.stream.stream, { inputType: StreamType.OggOpus, metadata: track })); }
 
 async function getSession(ctx) {
   const channel = voiceChannel(ctx); if (!channel) { await ctx.fail('Entra primero a un canal de voz.'); return null; }
   let session = currentSession(ctx.guild.id); if (session) return session;
-  const connection = joinVoiceChannel({ channelId: channel.id, guildId: ctx.guild.id, adapterCreator: ctx.guild.voiceAdapterCreator, selfDeaf: true, daveEncryption: false });
+  const connection = joinVoiceChannel({ channelId: channel.id, guildId: ctx.guild.id, adapterCreator: ctx.guild.voiceAdapterCreator, selfDeaf: true });
   try { await entersState(connection, VoiceConnectionStatus.Ready, 20_000); } catch { connection.destroy(); await ctx.fail('No pude conectarme al canal de voz.'); return null; }
   const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } }); session = { connection, player, channelId: channel.id, queue: [], current: null, repeat: false, stream: null }; sessions.set(ctx.guild.id, session); connection.subscribe(player);
   player.on(AudioPlayerStatus.Idle, () => { if (session.repeat && session.current) session.queue.unshift(session.current); advance(session); });
-  player.on('error', (error) => { logger.error('[music] Reproducción directa', error); advance(session); }); connection.on(VoiceConnectionStatus.Destroyed, () => { destroyStream(session); sessions.delete(ctx.guild.id); }); return session;
+  player.on('stateChange', (before, after) => logger.info(`[music] reproductor ${before.status} → ${after.status}`));
+  player.on('error', (error) => { logger.error(`[music] Reproducción directa: ${error.message}. ${session.stream?.getLastError?.() || ''}`, error); advance(session); });
+  connection.on('stateChange', (before, after) => logger.info(`[music] voz ${before.status} → ${after.status}`));
+  connection.on(VoiceConnectionStatus.Destroyed, () => { destroyStream(session); sessions.delete(ctx.guild.id); }); return session;
 }
 async function play(ctx) {
   const query = ctx.text.trim(); if (!query) return ctx.fail('Uso: `xyb play canción o enlace`'); const session = await getSession(ctx); if (!session) return;
