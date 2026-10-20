@@ -24,16 +24,19 @@ async function findTrack(query) {
 }
 function openStream(url) {
   const ytdlp = spawn(process.env.YTDLP_PATH || 'yt-dlp', ['-f', 'bestaudio/best', '--no-playlist', '--no-warnings', '--no-progress', '-o', '-', url]);
-  const ffmpeg = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-c:a', 'libopus', '-b:a', '128k', '-ar', '48000', '-ac', '2', '-f', 'ogg', 'pipe:1']);
-  ytdlp.stdout.pipe(ffmpeg.stdin); return { stream: ffmpeg.stdout, stop: () => { ytdlp.kill('SIGKILL'); ffmpeg.kill('SIGKILL'); } };
+  const ffmpeg = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-f', 's16le', '-ar', '48000', '-ac', '2', 'pipe:1']);
+  ytdlp.stdout.pipe(ffmpeg.stdin);
+  ytdlp.on('error', (error) => logger.error('[music] No pude iniciar yt-dlp', error));
+  ffmpeg.on('error', (error) => logger.error('[music] No pude iniciar FFmpeg', error));
+  return { stream: ffmpeg.stdout, stop: () => { ytdlp.kill('SIGKILL'); ffmpeg.kill('SIGKILL'); } };
 }
 function destroyStream(session) { try { session.stream?.stop(); } catch {} session.stream = null; }
-function advance(session) { destroyStream(session); const track = session.queue.shift(); if (!track) { session.current = null; return; } session.current = track; session.stream = openStream(track.url); session.player.play(createAudioResource(session.stream.stream, { inputType: StreamType.OggOpus })); }
+function advance(session) { destroyStream(session); const track = session.queue.shift(); if (!track) { session.current = null; return; } session.current = track; session.stream = openStream(track.url); session.player.play(createAudioResource(session.stream.stream, { inputType: StreamType.Raw })); }
 
 async function getSession(ctx) {
   const channel = voiceChannel(ctx); if (!channel) { await ctx.fail('Entra primero a un canal de voz.'); return null; }
   let session = currentSession(ctx.guild.id); if (session) return session;
-  const connection = joinVoiceChannel({ channelId: channel.id, guildId: ctx.guild.id, adapterCreator: ctx.guild.voiceAdapterCreator, selfDeaf: true });
+  const connection = joinVoiceChannel({ channelId: channel.id, guildId: ctx.guild.id, adapterCreator: ctx.guild.voiceAdapterCreator, selfDeaf: true, daveEncryption: false });
   try { await entersState(connection, VoiceConnectionStatus.Ready, 20_000); } catch { connection.destroy(); await ctx.fail('No pude conectarme al canal de voz.'); return null; }
   const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } }); session = { connection, player, channelId: channel.id, queue: [], current: null, repeat: false, stream: null }; sessions.set(ctx.guild.id, session); connection.subscribe(player);
   player.on(AudioPlayerStatus.Idle, () => { if (session.repeat && session.current) session.queue.unshift(session.current); advance(session); });
