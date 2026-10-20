@@ -2,7 +2,7 @@ const { createStore } = require('../store');
 const profiles = require('./profiles');
 
 const store = createStore('economy');
-const COOLDOWNS = { work: 30 * 60_000, fish: 10 * 60_000, mine: 15 * 60_000, daily: 24 * 60 * 60_000 };
+const COOLDOWNS = { work: 5 * 60_000, fish: 5 * 60_000, mine: 15 * 60_000, daily: 24 * 60 * 60_000 };
 const FISH = [
   ['🐟 Pez común', 18], ['🐠 Pez tropical', 32], ['🦐 Camarón', 25], ['🦑 Calamar', 45],
   ['🐡 Pez globo', 60], ['🦈 Tiburón pequeño', 120], ['🐋 Tesoro del océano', 250],
