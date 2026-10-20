@@ -8,7 +8,15 @@ const BIN_NAME = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
 
 const PREBUFFER_BYTES = 256 * 1024;      // colchón inicial (~32 s a 64 kbps)
 const PREBUFFER_TIMEOUT_MS = 10_000;
+const YOUTUBE_PREBUFFER_TIMEOUT_MS = 20_000;
 const DEFAULT_BITRATE = 64;
+
+const YOUTUBE_URL = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/(?:watch\?|shorts\/|embed\/|live\/)|youtu\.be\/)/i;
+const YOUTUBE_CLIENTS = process.env.YOUTUBE_CLIENTS || 'mweb,web_embedded,android';
+const YTDLP_PLUGIN_DIR = process.env.YTDLP_PLUGIN_DIR || '/opt/yt-dlp-plugins';
+const POT_PLUGIN_ZIP = path.join(YTDLP_PLUGIN_DIR, 'bgutil-ytdlp-pot-provider.zip');
+const HAS_POT_PLUGIN = fs.existsSync(POT_PLUGIN_ZIP);
+const POT_PROVIDER_URL = process.env.YTDLP_POT_PROVIDER_URL || '';
 
 const USER_AGENT = process.env.YTDLP_USER_AGENT ||
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -62,11 +70,40 @@ function isUrl(text) {
     return /^https?:\/\//i.test(text);
 }
 
+function isYouTubeUrl(value) {
+    return YOUTUBE_URL.test(String(value || '').trim());
+}
+
+/**
+ * yt-dlp necesita el plugin de PO Token y un runtime de JavaScript para
+ * obtener formatos de YouTube desde una IP de datacenter. Sin el plugin,
+ * YouTube se intenta igualmente y el manager cae a SoundCloud si falla.
+ */
+function youtubeArgs() {
+    const args = [];
+
+    if (!HAS_POT_PLUGIN) return args;
+
+    args.push(
+        '--plugin-dirs', YTDLP_PLUGIN_DIR,
+        '--js-runtimes', process.env.YTDLP_JS_RUNTIME || 'node'
+    );
+
+    if (POT_PROVIDER_URL) {
+        args.push('--extractor-args', `youtubepot-bgutilhttp:base_url=${POT_PROVIDER_URL}`);
+    }
+
+    args.push('--extractor-args', `youtube:player_client=${YOUTUBE_CLIENTS}`);
+    return args;
+}
+
 function classifyError(error) {
     const message = error?.message || '';
 
     if (/DRM protected|DRM/i.test(message)) {
         error.code = 'DRM';
+    } else if (/Sign in to confirm|not a bot|HTTP Error 429|Too Many Requests/i.test(message)) {
+        error.code = 'YOUTUBE_BLOCKED';
     } else if (/403|Forbidden/i.test(message)) {
         error.code = 'FORBIDDEN';
     }
@@ -139,6 +176,122 @@ function normalizeSoundCloud(entry) {
         url: track.url,
         source: 'soundcloud'
     };
+}
+
+function normalizeYouTube(entry) {
+    const track = normalize(entry);
+    const id = entry.id || null;
+    const url = entry.webpage_url
+        || entry.original_url
+        || (id ? `https://www.youtube.com/watch?v=${id}` : track.url);
+
+    return {
+        ...track,
+        id: `yt:${id || url}`,
+        url,
+        source: 'youtube'
+    };
+}
+
+function youtubeScore(track, expected = {}) {
+    const title = normalizeForMatch(track.title);
+    const uploader = normalizeForMatch(track.uploader);
+    const combined = `${title} ${uploader}`;
+    const wantedTitle = normalizeForMatch(expected.title);
+    const wantedArtist = normalizeForMatch(expected.artist);
+    let score = 0;
+
+    if (wantedTitle) {
+        if (title === wantedTitle) score += 8;
+        else if (title.includes(wantedTitle) || wantedTitle.includes(title)) score += 5;
+        else score -= 2;
+    }
+
+    if (wantedArtist) {
+        if (uploader === wantedArtist) score += 4;
+        else if (uploader.includes(wantedArtist) || wantedArtist.includes(uploader)) score += 3;
+        else if (combined.includes(wantedArtist)) score += 2;
+    }
+
+    if (/\b(official|oficial|topic)\b/.test(combined)) score += 1;
+    if (/\b(cover|karaoke|remix|nightcore|sped up|slowed|instrumental|tutorial|reaction)\b/.test(title)) score -= 6;
+    if (/\b(en vivo|live)\b/.test(title)) score -= 4;
+
+    if (expected.duration && track.duration) {
+        const difference = Math.abs(track.duration - expected.duration);
+        if (difference <= 3) score += 3;
+        else if (difference <= 10) score += 1;
+        else if (difference > 60) score -= 1;
+    }
+
+    if (track.isLive) score -= 10;
+    return score;
+}
+
+/**
+ * Busca videos en YouTube. La búsqueda no necesita PO Token; el token se
+ * pide al abrir el audio. Se ordenan los resultados para preferir la versión
+ * oficial y descartar covers, directos y versiones aceleradas.
+ */
+async function searchYouTube(query, {
+    limit = 10,
+    minDuration = 20,
+    expectedTitle = null,
+    expectedArtist = null,
+    expectedDuration = null
+} = {}) {
+    const target = `ytsearch${Math.min(Math.max(Math.round(limit), 1), 20)}:${query}`;
+    const raw = await run([
+        '-J',
+        ...youtubeArgs(),
+        '--no-warnings',
+        '--no-progress',
+        '--no-playlist',
+        '--flat-playlist',
+        target
+    ], { timeout: 90_000 });
+
+    const json = JSON.parse(raw);
+    const entries = (json.entries || [json]).filter(Boolean);
+    const expected = {
+        title: expectedTitle,
+        artist: expectedArtist,
+        duration: expectedDuration
+    };
+
+    const candidates = entries
+        .map(normalizeYouTube)
+        .filter((track) => track.url && (!track.duration || track.duration >= minDuration))
+        .filter((track) => !track.isLive)
+        .map((track) => ({ track, score: youtubeScore(track, expected) }))
+        .sort((left, right) => right.score - left.score)
+        .map(({ track }) => track);
+
+    if (!candidates.length) {
+        throw noPlayableError('No encontré una versión reproducible en YouTube.');
+    }
+
+    return candidates;
+}
+
+async function resolveYouTubeUrl(url) {
+    const raw = await run([
+        '-J',
+        ...youtubeArgs(),
+        '--no-warnings',
+        '--no-progress',
+        '--no-playlist',
+        url
+    ], { timeout: 90_000 });
+
+    const json = JSON.parse(raw);
+    const entry = (json.entries || [json]).filter(Boolean)[0];
+
+    if (!entry) {
+        throw noPlayableError('No pude leer ese video de YouTube.');
+    }
+
+    return normalizeYouTube(entry);
 }
 
 function isDrmError(error) {
@@ -401,10 +554,161 @@ function startTranscoder(directUrl, { seek = 0, bitrateKbps = DEFAULT_BITRATE, v
 }
 
 /**
+ * YouTube devuelve cabeceras y cookies de sesión que FFmpeg no replica.
+ * Por eso yt-dlp descarga el audio y lo entrega por stdout a FFmpeg, que
+ * sigue haciendo la conversión a Ogg/Opus de 64 kbps.
+ */
+function startYouTubeTranscoder(url, { seek = 0, bitrateKbps = DEFAULT_BITRATE, volume = 1 } = {}) {
+    return new Promise((resolve, reject) => {
+        const bitrate = clampBitrate(bitrateKbps);
+        const gain = Math.min(Math.max(Number(volume) || 0, 0), 2);
+        const startSeconds = Math.max(0, Math.floor(Number(seek) || 0));
+
+        const ytArgs = [
+            ...youtubeArgs(),
+            '-f', 'bestaudio[acodec=opus]/bestaudio/best',
+            '--no-playlist',
+            '--no-warnings',
+            '--no-progress',
+            ...(startSeconds > 0 ? ['--download-sections', `*${startSeconds}-`] : []),
+            '-o', '-',
+            url
+        ];
+
+        const ffmpegArgs = [
+            '-hide_banner',
+            '-loglevel', 'error',
+            '-nostdin',
+            '-analyzeduration', '1000000',
+            '-probesize', '1048576',
+            '-i', 'pipe:0'
+        ];
+
+        if (gain !== 1) ffmpegArgs.push('-af', `volume=${gain.toFixed(3)}`);
+
+        ffmpegArgs.push(
+            '-vn', '-sn', '-dn',
+            '-c:a', 'libopus',
+            '-b:a', `${bitrate}k`,
+            '-ar', '48000',
+            '-ac', '2',
+            '-application', 'audio',
+            '-frame_duration', '20',
+            '-compression_level', '10',
+            '-f', 'ogg',
+            'pipe:1'
+        );
+
+        const downloader = spawn(YTDLP, ytArgs, { windowsHide: true });
+        const transcoder = spawn(FFMPEG, ffmpegArgs, { windowsHide: true });
+
+        let ffmpegError = '';
+        let downloaderError = '';
+        let received = 0;
+        let settled = false;
+        let killed = false;
+
+        const buffer = new PassThrough({ highWaterMark: 4 * 1024 * 1024 });
+
+        const counter = new Transform({
+            transform(chunk, _encoding, callback) {
+                received += chunk.length;
+                if (!settled && received >= PREBUFFER_BYTES) start();
+                callback(null, chunk);
+            }
+        });
+
+        const cleanup = () => {
+            clearTimeout(prebufferTimer);
+            transcoder.removeListener('close', onTranscoderClose);
+            transcoder.removeListener('error', onTranscoderError);
+            downloader.removeListener('close', onDownloaderClose);
+            downloader.removeListener('error', onDownloaderError);
+        };
+
+        const start = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve({
+                stream: buffer,
+                bitrate,
+                directUrl: null,
+                kill: () => {
+                    killed = true;
+                    try { downloader.kill('SIGKILL'); } catch {}
+                    try { transcoder.kill('SIGKILL'); } catch {}
+                    try { buffer.destroy(); } catch {}
+                }
+            });
+        };
+
+        const fail = (message) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            try { downloader.kill('SIGKILL'); } catch {}
+            try { transcoder.kill('SIGKILL'); } catch {}
+            try { buffer.destroy(); } catch {}
+            reject(new Error(message));
+        };
+
+        const onTranscoderClose = (code) => {
+            if (settled) return;
+            if (received > 0) return start();
+            fail(code === 0
+                ? 'El audio de YouTube terminó antes de empezar'
+                : `ffmpeg falló (${code}): ${ffmpegError.trim().split('\n').slice(-2).join(' ')}`);
+        };
+
+        const onDownloaderClose = (code) => {
+            if (settled || killed) return;
+            if (received > 0) return;
+            if (code === 0) return fail('YouTube no entregó audio');
+            fail(`yt-dlp falló (${code}): ${downloaderError.trim().split('\n').slice(-3).join(' ') || 'sin detalles'}`);
+        };
+
+        const onTranscoderError = (error) => {
+            fail(error.code === 'ENOENT'
+                ? 'No encontré ffmpeg. Define FFMPEG_PATH.'
+                : error.message);
+        };
+
+        const onDownloaderError = (error) => {
+            fail(error.code === 'ENOENT'
+                ? 'No encontré yt-dlp. Coloca yt-dlp en bin/ o define YTDLP_PATH.'
+                : error.message);
+        };
+
+        const prebufferTimer = setTimeout(() => {
+            if (received > 0) return start();
+            fail('No se pudo iniciar el audio de YouTube a tiempo');
+        }, YOUTUBE_PREBUFFER_TIMEOUT_MS);
+
+        transcoder.stderr.on('data', (d) => { ffmpegError += d.toString(); });
+        downloader.stderr.on('data', (d) => { downloaderError += d.toString(); });
+        transcoder.on('close', onTranscoderClose);
+        transcoder.on('error', onTranscoderError);
+        downloader.on('close', onDownloaderClose);
+        downloader.on('error', onDownloaderError);
+        transcoder.stdout.on('error', () => {});
+        transcoder.stdin.on('error', () => {});
+        downloader.stdout.on('error', () => {});
+
+        downloader.stdout.pipe(transcoder.stdin);
+        transcoder.stdout.pipe(counter).pipe(buffer);
+    });
+}
+
+/**
  * Abre el audio y entrega un stream Ogg/Opus con prebuffer.
  * Reintenta una vez con una URL fresca si la CDN devuelve 403 o expira.
  */
 async function openStream(url, { seek = 0, bitrateKbps = DEFAULT_BITRATE, volume = 1, directUrl = null } = {}) {
+    if (isYouTubeUrl(url)) {
+        return startYouTubeTranscoder(url, { seek, bitrateKbps, volume });
+    }
+
     let lastError;
     let cachedUrl = directUrl;
 
@@ -428,8 +732,14 @@ module.exports = {
     YTDLP,
     searchSoundCloud,
     resolveSoundCloudUrl,
+    searchYouTube,
+    resolveYouTubeUrl,
     openStream,
     getDirectUrl,
     isUrl,
+    isYouTubeUrl,
+    scoreYouTubeCandidate: youtubeScore,
+    normalizeForMatch,
+    titleMatches,
     clampBitrate
 };

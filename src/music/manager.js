@@ -12,6 +12,7 @@ const {
 
 const { EmbedBuilder } = require('discord.js');
 const ytdlp = require('./ytdlp');
+const youtube = require('./youtube');
 const soundcloud = require('./soundcloud');
 const itunes = require('./itunes');
 
@@ -339,6 +340,28 @@ async function startTrack(guildId, track, { seek = 0, keepPaused = false, silent
         session.current = null;
         session.playStartedAt = null;
 
+        // Si YouTube falla (IP bloqueada, token caducado, etc.) se intenta
+        // una vez la misma búsqueda en SoundCloud antes de rendirse.
+        if (track.source === 'youtube' && track.fallbackQuery && !track.fallbackAttempted) {
+            track.fallbackAttempted = true;
+
+            try {
+                const fallback = await resolveSoundCloudOnly(track.fallbackQuery);
+                fallback.requestedBy = track.requestedBy;
+                fallback.fallbackAttempted = true;
+                session.queue.unshift(fallback);
+                retry = true;
+
+                if (!silent) {
+                    notify(session, '⚠️ YouTube no respondió; probando la misma canción en SoundCloud...');
+                }
+
+                return;
+            } catch (fallbackError) {
+                console.error('[MUSIC] Tampoco se pudo reproducir en SoundCloud:', fallbackError.message);
+            }
+        }
+
         if (!silent) {
             if (error.code === 'NO_PLAYABLE' || error.code === 'DRM') {
                 notify(session, `⚠️ No pude reproducir **${track.title}**: ${error.message}`);
@@ -371,28 +394,32 @@ function playNext(guildId) {
     startTrack(guildId, track);
 }
 
-async function resolveTrack(query) {
-    const text = String(query || '').trim();
+function applyMetadata(track, metadata) {
+    if (!track.thumbnail && metadata[0]?.thumbnail) {
+        track.thumbnail = metadata[0].thumbnail;
+    }
 
-    if (ytdlp.isUrl(text)) {
-        if (!soundcloud.isSoundCloudUrl(text)) {
-            throw soundcloud.unsupportedUrlError();
+    if (!track.duration && metadata[0]?.duration) {
+        track.duration = metadata[0].duration;
+    }
+
+    return track;
+}
+
+async function resolveSoundCloudOnly(text, metadata) {
+    let info = metadata;
+
+    if (!info) {
+        try {
+            info = await itunes.search(text, { limit: 1 });
+        } catch (error) {
+            console.error('[MUSIC] iTunes no respondió, se busca el texto original:', error.message);
+            info = [];
         }
-
-        return soundcloud.resolveUrl(text);
     }
 
-    // iTunes solo aporta título/artista para acertar con la búsqueda. El audio
-    // siempre sale de SoundCloud; YouTube no interviene.
-    let metadata = [];
-    try {
-        metadata = await itunes.search(text, { limit: 1 });
-    } catch (error) {
-        console.error('[MUSIC] iTunes no respondió, se busca el texto original:', error.message);
-    }
-
-    const title = metadata[0]?.title;
-    const artist = metadata[0]?.artist;
+    const title = info[0]?.title;
+    const artist = info[0]?.artist;
     const attempts = [];
 
     // El título solo suele encontrar subidas de usuarios; añadir el artista
@@ -427,17 +454,91 @@ async function resolveTrack(query) {
         throw error;
     }
 
-    const track = results[0];
+    return applyMetadata(results[0], info);
+}
 
-    if (!track.thumbnail && metadata[0]?.thumbnail) {
-        track.thumbnail = metadata[0].thumbnail;
+async function resolveTrack(query) {
+    const text = String(query || '').trim();
+
+    if (ytdlp.isUrl(text)) {
+        if (youtube.isYouTubeUrl(text)) return youtube.resolveUrl(text);
+        if (soundcloud.isSoundCloudUrl(text)) return soundcloud.resolveUrl(text);
+        throw soundcloud.unsupportedUrlError();
     }
 
-    if (!track.duration && metadata[0]?.duration) {
-        track.duration = metadata[0].duration;
+    // iTunes solo aporta título/artista/duración para acertar con la búsqueda.
+    let metadata = [];
+    try {
+        metadata = await itunes.search(text, { limit: 1 });
+    } catch (error) {
+        console.error('[MUSIC] iTunes no respondió, se busca el texto original:', error.message);
     }
 
-    return track;
+    const title = metadata[0]?.title;
+    const artist = metadata[0]?.artist;
+    const duration = metadata[0]?.duration;
+    const attempts = [];
+
+    if (title && artist) {
+        attempts.push({
+            query: `${title} ${artist}`,
+            expectedTitle: title,
+            expectedArtist: artist,
+            expectedDuration: duration
+        });
+    }
+    if (title) {
+        attempts.push({
+            query: title,
+            expectedTitle: title,
+            expectedArtist: artist,
+            expectedDuration: duration
+        });
+    }
+    if (!attempts.some((attempt) => attempt.query.toLowerCase() === text.toLowerCase())) {
+        attempts.push({
+            query: text,
+            expectedTitle: null,
+            expectedArtist: null,
+            expectedDuration: duration
+        });
+    }
+
+    let youtubeError = null;
+
+    // YouTube es la fuente principal (la misma que usaba el bot anterior).
+    for (const attempt of attempts) {
+        try {
+            const results = await youtube.search(attempt.query, {
+                limit: 10,
+                expectedTitle: attempt.expectedTitle,
+                expectedArtist: attempt.expectedArtist,
+                expectedDuration: attempt.expectedDuration
+            });
+
+            if (results.length) {
+                const track = applyMetadata(results[0], metadata);
+                track.fallbackQuery = text;
+                return track;
+            }
+        } catch (error) {
+            youtubeError = error;
+            if (process.env.MUSIC_DEBUG) {
+                console.error(`[YouTube] ${attempt.query}: ${error.message}`);
+            }
+        }
+    }
+
+    // Si YouTube no da una versión reproducible, se mantiene SoundCloud como
+    // respaldo para que el comando no se quede sin audio.
+    try {
+        return await resolveSoundCloudOnly(text, metadata);
+    } catch (soundCloudError) {
+        if (soundCloudError.code === 'NO_PLAYABLE' || soundCloudError.code === 'NORESULTS') {
+            throw soundCloudError;
+        }
+        throw youtubeError || soundCloudError;
+    }
 }
 
 async function enqueue(source, query) {

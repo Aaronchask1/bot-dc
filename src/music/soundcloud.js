@@ -7,7 +7,7 @@ function isSoundCloudUrl(value) {
 }
 
 function unsupportedUrlError() {
-    const error = new Error('YouTube está desactivado. Usa el nombre de la canción o un enlace de SoundCloud.');
+    const error = new Error('Usa un enlace de YouTube o SoundCloud, o escribe el nombre de la canción.');
     error.code = 'UNSUPPORTED_URL';
     return error;
 }

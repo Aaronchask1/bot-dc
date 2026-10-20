@@ -7,6 +7,7 @@ const path = require('node:path');
 process.env.XYB_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'xyb-music-'));
 
 const ytdlp = require('../src/music/ytdlp');
+const youtube = require('../src/music/youtube');
 const soundcloud = require('../src/music/soundcloud');
 const music = require('../src/music/manager');
 const { findCommand } = require('../src/commands');
@@ -56,14 +57,29 @@ test('detecta URLs y rechaza búsquedas', () => {
   assert.equal(ytdlp.isUrl('bad bunny'), false);
 });
 
-test('solo acepta enlaces de SoundCloud para reproducir', async () => {
+test('detecta enlaces de YouTube y SoundCloud', async () => {
+  assert.equal(youtube.isYouTubeUrl('https://www.youtube.com/watch?v=abc'), true);
+  assert.equal(youtube.isYouTubeUrl('https://youtu.be/abc'), true);
+  assert.equal(youtube.isYouTubeUrl('https://music.youtube.com/watch?v=abc'), true);
+  assert.equal(youtube.isYouTubeUrl('https://soundcloud.com/t3relemento/rafa-caro'), false);
   assert.equal(soundcloud.isSoundCloudUrl('https://soundcloud.com/t3relemento/rafa-caro'), true);
   assert.equal(soundcloud.isSoundCloudUrl('https://www.youtube.com/watch?v=abc'), false);
 
   await assert.rejects(
-    music.resolveTrack('https://www.youtube.com/watch?v=abc'),
+    music.resolveTrack('https://ejemplo.com/no-es-musica'),
     (error) => error.code === 'UNSUPPORTED_URL'
   );
+});
+
+test('el ranking prefiere la versión oficial y evita covers o directos', () => {
+  const expected = { title: 'Rafa Caro', artist: 'T3r Elemento', duration: 247 };
+  const official = { title: 'Rafa Caro', uploader: 'T3R Elemento', duration: 249, isLive: false };
+  const cover = { title: 'Rafa Caro (Cover)', uploader: 'Covers Random', duration: 245, isLive: false };
+  const live = { title: 'Rafa Caro - En Vivo', uploader: 'T3R Elemento', duration: 263, isLive: false };
+
+  const officialScore = ytdlp.scoreYouTubeCandidate(official, expected);
+  assert.ok(officialScore > ytdlp.scoreYouTubeCandidate(cover, expected));
+  assert.ok(officialScore > ytdlp.scoreYouTubeCandidate(live, expected));
 });
 
 test('sin canal de voz, play falla antes de tocar la red', async () => {
