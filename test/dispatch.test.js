@@ -378,5 +378,7 @@ test('el rol mecos dispara una respuesta distinta al ponerlo y al quitarlo', () 
 });
 
 test('los alias nuevos están registrados', () => {
+  assert.equal(findCommand('24x7').name, 'vc');
+  assert.equal(findCommand('voz').name, 'vc');
   assert.equal(findCommand('listroles').name, 'roles');
 });

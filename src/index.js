@@ -108,6 +108,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent,
     // Opcional: actívalo con MEMBERS_INTENT=true en .env y habilitando
     // "Server Members Intent" en el portal de desarrolladores.
@@ -148,7 +149,7 @@ const EXTRA_COMMAND_CATEGORIES = {
   afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad',
   fun: 'diversion', games: 'diversion',
   balance: 'economia', work: 'economia', fish: 'economia', mine: 'economia', daily: 'economia', bank: 'economia', deposit: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia', pet: 'economia',
-  add: 'servidor', autoresponder: 'servidor', autoreact: 'servidor', prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor',
+  add: 'servidor', autoresponder: 'servidor', autoreact: 'servidor', prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
   purge: 'moderacion', unban: 'moderacion', rol: 'moderacion', steal: 'moderacion',
 };
 
