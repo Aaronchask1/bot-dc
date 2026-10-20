@@ -15,7 +15,7 @@ async function findTrack(query) {
   const isUrl = /^https?:\/\//i.test(query); let search = query;
   if (!isUrl) try { const match = await canonicalize(query); if (match) search = match.query; } catch (error) { logger.warn(`[music] MusicBrainz: ${error.message}`); }
   return new Promise((resolve, reject) => {
-    const child = spawn(process.env.YTDLP_PATH || 'yt-dlp', ['--dump-single-json', '--flat-playlist', '--no-playlist', '--no-warnings', '--no-progress', isUrl ? search : `ytsearch1:${search}`]);
+    const child = spawn(process.env.YTDLP_PATH || 'yt-dlp', ['--dump-json', '--no-playlist', '--no-warnings', '--no-progress', isUrl ? search : `ytsearch1:${search}`]);
     let output = ''; let errors = ''; const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('La búsqueda tardó demasiado.')); }, 20_000);
     child.stdout.on('data', (data) => { output += data; }); child.stderr.on('data', (data) => { errors += data; });
     child.on('error', (error) => { clearTimeout(timer); reject(error); });
