@@ -1,6 +1,10 @@
 const { EmbedBuilder } = require('discord.js');
 const { Connectors, LoadType, Shoukaku } = require('shoukaku');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
 const logger = require('../logger');
+
+const execFileAsync = promisify(execFile);
 
 let playerManager = null;
 const sessions = new Map();
@@ -86,10 +90,28 @@ function trackList(result) {
   return [];
 }
 
+async function resolveWithYtDlp(query) {
+  // Lavalink puede perder temporalmente el acceso a los endpoints de búsqueda.
+  // En ese caso, yt-dlp resuelve el nombre a una URL pública y Lavalink solo
+  // recibe el enlace final para reproducirlo.
+  const binary = process.env.YTDLP_PATH || 'yt-dlp';
+  try {
+    const { stdout } = await execFileAsync(binary, [
+      '--dump-single-json', '--flat-playlist', '--no-playlist', '--no-warnings',
+      '--no-progress', `ytsearch1:${query}`,
+    ], { timeout: 20_000, maxBuffer: 1024 * 1024, windowsHide: true });
+    const result = JSON.parse(stdout);
+    const item = Array.isArray(result.entries) ? result.entries.find(Boolean) : result;
+    return item?.webpage_url || (item?.id ? `https://www.youtube.com/watch?v=${item.id}` : null);
+  } catch (error) {
+    logger.warn(`[music] yt-dlp no resolvió la búsqueda: ${error.message}`);
+    return null;
+  }
+}
+
 async function resolveTracks(node, query) {
-  const identifiers = /^https?:\/\//i.test(query)
-    ? [query]
-    : [`ytsearch:${query}`, `scsearch:${query}`, `spsearch:${query}`];
+  const isUrl = /^https?:\/\//i.test(query);
+  const identifiers = isUrl ? [query] : [`ytsearch:${query}`, `scsearch:${query}`, `spsearch:${query}`];
 
   for (const identifier of identifiers) {
     try {
@@ -100,6 +122,18 @@ async function resolveTracks(node, query) {
       // Un proveedor puede estar bloqueado temporalmente; probamos el
       // siguiente sin hacer fallar el comando completo.
       logger.warn(`[music] Búsqueda fallida en ${identifier.split(':')[0]}: ${error.message}`);
+    }
+  }
+
+  if (!isUrl) {
+    const url = await resolveWithYtDlp(query);
+    if (url) {
+      try {
+        const tracks = trackList(await node.rest.resolve(url));
+        if (tracks.length) return tracks;
+      } catch (error) {
+        logger.warn(`[music] Lavalink no pudo cargar la URL resuelta por yt-dlp: ${error.message}`);
+      }
     }
   }
   return [];
