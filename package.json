@@ -8,6 +8,8 @@
     "start": "node src/index.js",
     "register": "node src/register-commands.js",
     "test": "node --test test/*.test.js",
+    "ytdlp": "node scripts/descargar-ytdlp.js",
+    "ytmusic": "node scripts/ytmusic-auth.js",
     "check:images": "node scripts/check-images.js",
     "postinstall": "patch-package"
   },
@@ -16,10 +18,12 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@fontsource/roboto": "^5.3.0",
     "@napi-rs/canvas": "^0.1.100",
     "discord.js": "^14.25.1",
-    "dotenv": "^16.6.1"
+    "dotenv": "^16.6.1",
+    "musicbrainz-api": "^2.0.1"
   },
   "devDependencies": {
     "patch-package": "^8.0.1"

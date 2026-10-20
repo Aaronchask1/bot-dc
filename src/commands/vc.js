@@ -10,7 +10,7 @@ module.exports = {
   async execute({ guild, member, isSlash, interaction, args, reply, fail }) {
     const word = (isSlash ? interaction.options.getString('accion') : args[0])?.toLowerCase(); const action = ACTIONS[word] ?? 'join'; const connection = getVoiceConnection(guild.id);
     if (action === 'leave') { if (!connection) return fail('No estoy en ningún canal de voz.'); connection.destroy(); return reply('👋 Salí del canal de voz.'); }
-    if (action === 'status') { const channel = connection?.joinConfig?.channel; return reply(channel ? `🔊 Estoy en <#${channel}> desde hace ${connection.joinConfig.selfMute ? '(silenciado)' : ''} \`${connection.state.status}\`.` : '🔇 No estoy en ningún canal de voz. Usa `xyb vc`.'); }
+    if (action === 'status') { const channelId = connection?.joinConfig?.channelId; return reply(channelId ? `🔊 Estoy en <#${channelId}> (${connection.state.status}).` : '🔇 No estoy en ningún canal de voz. Usa `xyb vc`.'); }
     if (connection) return fail(`Ya estoy en <#${connection.joinConfig.channel}>. Usa \`xyb vc salir\` cuando quieras.`);
     const channel = member?.voice?.channel ?? guild.channels.cache.find((item) => item.type === ChannelType.GuildVoice && item.joinable !== false);
     if (!channel) return fail('No encuentro ningún canal de voz. Entra a uno y usa `xyb vc`.');

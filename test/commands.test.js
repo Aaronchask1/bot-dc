@@ -147,6 +147,9 @@ test('ningún comando se cae al ejecutarse de verdad', async () => {
   const fallos = [];
 
   for (const command of listCommands()) {
+    // Los comandos de música y metadatos consultan servicios externos
+    // (YouTube, MusicBrainz, Python); se prueban aparte para no depender de la red.
+    if (command.requiresNetwork) continue;
     const { context } = makeContext({
       args: ['add', '<@961823716273176698>', 'mecos'],
       target: { id: 'u2', username: 'csr', tag: 'csr#2', toString: () => '<@961823716273176698>', displayAvatarURL: () => AVATAR },

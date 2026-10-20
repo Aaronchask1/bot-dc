@@ -2,3 +2,8 @@
 node_modules
 logs
 npm-debug.log
+bin
+python/.venv
+python/oauth.json
+python/browser.json
+cookies.txt
