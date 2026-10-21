@@ -8,8 +8,21 @@ const ERRORS = {
     NORESULTS: '❌ No encontré resultados para esa búsqueda.',
     NO_PLAYABLE: '❌ No encontré una versión reproducible. Prueba con otro nombre o enlace.',
     DRM: '❌ Esa versión tiene DRM. Prueba con otra versión.',
-    UNSUPPORTED_URL: '❌ Usa un enlace de YouTube o SoundCloud, o escribe el nombre de la canción.'
+    UNSUPPORTED_URL: '❌ Usa un enlace de YouTube o SoundCloud, o escribe el nombre de la canción.',
+    YOUTUBE_BLOCKED: '❌ YouTube bloqueó temporalmente ese video. Prueba otra vez en unos segundos.',
+    FORBIDDEN: '❌ YouTube rechazó el audio. Prueba otra vez en unos segundos.'
 };
+
+function sanitizeQuery(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+
+    const markdownLink = value.match(/\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/i);
+    if (markdownLink) return markdownLink[1];
+
+    const pastedUrl = value.match(/https?:\/\/[^\s<>\[\]()]+/i);
+    return pastedUrl ? pastedUrl[0].replace(/[.,!?]+$/, '') : value;
+}
 
 async function respond(ctx, waiting, content) {
     if (waiting?.edit) return waiting.edit({ content, embeds: [] });
@@ -35,9 +48,9 @@ module.exports = {
     },
 
     async execute(ctx) {
-        const query = String(ctx.isSlash
+        const query = sanitizeQuery(ctx.isSlash
             ? ctx.interaction.options.getString('busqueda') ?? ''
-            : ctx.args.join(' ')).trim();
+            : ctx.args.join(' '));
 
         if (!query) {
             return ctx.fail('❌ Uso: `xyb play <canción o URL>`');
@@ -73,3 +86,5 @@ module.exports = {
         }
     }
 };
+
+module.exports.sanitizeQuery = sanitizeQuery;
