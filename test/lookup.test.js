@@ -61,6 +61,32 @@ test('consulta global anónima, ocupados/libres e intervalo', async () => {
   assert.deepEqual(h.service.search(filters).entries.map((entry) => entry.username), ['xyz']);
 });
 
+test('usa RapidAPI cuando hay clave configurada y normaliza su respuesta', async () => {
+  const previousKey = process.env.RAPIDAPI_KEY;
+  process.env.RAPIDAPI_KEY = 'test-key';
+  const values = {};
+  const calls = [];
+  const service = lib.createLookupService({
+    store: { get: (key) => values[key], set: (key, value) => { values[key] = value; } },
+    now: () => 1_000_000,
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return response(200, { username: 'abc', taken: false, available: true });
+    },
+  });
+  try {
+    const result = await service.discover(filters, { exactName: 'abc' });
+    assert.equal(result.status, 'complete');
+    assert.equal(result.last.status, 'available');
+    assert.match(calls[0].url, /check_username\/abc$/);
+    assert.equal(calls[0].options.headers['x-rapidapi-host'], lib.RAPIDAPI_HOST);
+    assert.equal(calls[0].options.headers['x-rapidapi-key'], 'test-key');
+  } finally {
+    if (previousKey === undefined) delete process.env.RAPIDAPI_KEY;
+    else process.env.RAPIDAPI_KEY = previousKey;
+  }
+});
+
 test('caché reutilizable y caducidad de resultados', async () => {
   const h = harness();
   await check(h.service, 'abc');

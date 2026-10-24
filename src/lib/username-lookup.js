@@ -7,6 +7,7 @@ const AVAILABLE_TTL = 15 * 60_000;
 const TAKEN_TTL = 60 * 60_000;
 const MAX_CACHE = 25_000;
 const BATCH_SIZE = 12;
+const RAPIDAPI_HOST = 'discord-username-availability-checker-api.p.rapidapi.com';
 
 function validName(type, value) {
   if (typeof value !== 'string') return false;
@@ -56,6 +57,43 @@ function createLookupService({
     return record;
   }
 
+  async function requestRapidApi(username, shouldStop = () => false) {
+    const key = String(process.env.RAPIDAPI_KEY || '').trim();
+    if (!key || shouldStop()) return null;
+    if (blockedUntil > now()) return { status: 'limited', retryAt: blockedUntil };
+    if (nextRequestAt > now()) await sleep(nextRequestAt - now());
+    if (shouldStop()) return { status: 'cancelled' };
+    nextRequestAt = now() + intervalMs;
+    try {
+      const response = await fetchImpl(`https://${RAPIDAPI_HOST}/check_username/${encodeURIComponent(username)}`, {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-key': key,
+          'x-rapidapi-host': RAPIDAPI_HOST,
+        },
+        signal: AbortSignal.timeout(12_000),
+      });
+      const data = await response.json().catch(() => null);
+      if (response.status === 429) {
+        blockedUntil = now() + 60_000;
+        return { status: 'limited', retryAt: blockedUntil };
+      }
+      if ([401, 403].includes(response.status)) {
+        blockedUntil = now() + 15 * 60_000;
+        return { status: 'restricted' };
+      }
+      const available = typeof data?.available === 'boolean'
+        ? data.available
+        : typeof data?.taken === 'boolean' ? !data.taken : null;
+      if (response.status === 200 && available !== null) {
+        return remember({ type: 'usernames', username, status: available ? 'available' : 'taken', checkedAt: now() });
+      }
+    } catch {
+      // El endpoint directo de Discord queda como respaldo si RapidAPI falla.
+    }
+    return null;
+  }
+
   async function request(type, username, shouldStop = () => false) {
     if (!validName(type, username)) return { status: 'invalid', username };
     if (blockedUntil > now()) return { status: 'limited', retryAt: blockedUntil };
@@ -63,6 +101,10 @@ function createLookupService({
     if (fresh(cached)) return { ...cached, cached: true };
     if (nextRequestAt > now()) await sleep(nextRequestAt - now());
     if (shouldStop()) return { status: 'cancelled' };
+    if (type === 'usernames' && process.env.RAPIDAPI_KEY) {
+      const rapidResult = await requestRapidApi(username, shouldStop);
+      if (rapidResult) return rapidResult;
+    }
     nextRequestAt = now() + intervalMs;
     const url = type === 'vanities'
       ? `https://discord.com/api/v10/invites/${encodeURIComponent(username)}?with_counts=false&with_expiration=false`
@@ -151,4 +193,4 @@ function createLookupService({
   return { search, discover, isBusy: () => active };
 }
 
-module.exports = { ...createLookupService(), createLookupService, candidate, alphabet, validName, MODES, BATCH_SIZE };
+module.exports = { ...createLookupService(), createLookupService, candidate, alphabet, validName, MODES, BATCH_SIZE, RAPIDAPI_HOST };
