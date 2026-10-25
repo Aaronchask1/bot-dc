@@ -96,7 +96,7 @@ function panel(session, { closed = false } = {}) {
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n') || `${suggested}${empty}`))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      `-# Página ${result.page + 1}/${result.pages} · ${result.total} resultados${closed ? ' · Cerrado' : ''}\n${session.notice ?? 'Preparando búsqueda global…'}\n-# Estado: ✅ disponible / ❌ no disponible · ${caveat}`,
+      `-# Página ${result.page + 1}/${result.pages} · ${result.total} disponibles${closed ? ' · Cerrado' : ''}\n${session.notice ?? 'Preparando búsqueda global…'}\n-# Estado mostrado: ✅ disponible · ${caveat}`,
     ))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
       button(session, 'prev', '◀️', ButtonStyle.Secondary, closed || result.page === 0),

@@ -58,7 +58,7 @@ test('consulta global anónima, ocupados/libres e intervalo', async () => {
   assert.equal(JSON.parse(options.body).username, 'abc');
   assert.equal(options.headers.Authorization, undefined);
   assert.equal(options.headers.Cookie, undefined);
-  assert.deepEqual(h.service.search(filters).entries.map((entry) => entry.username), ['xyz', 'abc']);
+  assert.deepEqual(h.service.search(filters).entries.map((entry) => entry.username), ['xyz']);
 });
 
 test('usa RapidAPI cuando hay clave configurada y normaliza su respuesta', async () => {
@@ -99,12 +99,12 @@ test('caché reutilizable y caducidad de resultados', async () => {
   assert.equal(h.calls.length, 2);
 });
 
-test('muestra disponibles y no disponibles, y genera hasta 25 sugerencias', async () => {
+test('oculta no disponibles y genera hasta 25 sugerencias', async () => {
   const h = harness([response(200, { taken: true }), response(200, { taken: false })]);
   await check(h.service, 'abc');
   await check(h.service, 'xyz');
   const entries = h.service.search(filters).entries;
-  assert.deepEqual(entries.map((entry) => [entry.username, entry.status]), [['xyz', 'available'], ['abc', 'taken']]);
+  assert.deepEqual(entries.map((entry) => [entry.username, entry.status]), [['xyz', 'available']]);
   const session = makeSession();
   assert.equal(session.suggestions.length, 25);
   assert.match(textOf(lookup.__test.panel(session)), /Sugerencias sin comprobar \(hasta 25\)/);
@@ -134,7 +134,7 @@ test('vanity sin invitación no equivale a disponibilidad garantizada', async ()
   assert.equal((await check(h.service, 'abc', 'vanities')).last.status, 'taken');
   assert.equal((await check(h.service, 'xyz', 'vanities')).last.status, 'unlinked');
   assert.equal((await check(h.service, 'def', 'vanities')).status, 'unavailable');
-  assert.equal(h.service.search({ ...filters, type: 'vanities' }).total, 2);
+  assert.equal(h.service.search({ ...filters, type: 'vanities' }).total, 1);
   assert.match(textOf(lookup.__test.panel({ ...makeSession(), type: 'vanities' })), /NO garantiza/);
 });
 

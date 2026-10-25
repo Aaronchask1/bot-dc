@@ -149,7 +149,7 @@ function createLookupService({
 
   function search({ type = 'usernames', length = 3, query = '', mode = 'todos', page = 0, pageSize = 8 } = {}) {
     const matches = Object.values(records()).filter((entry) => entry.type === type && fresh(entry)
-      && (type === 'vanities' ? ['taken', 'unlinked'].includes(entry.status) : ['available', 'taken'].includes(entry.status))
+      && entry.status === (type === 'vanities' ? 'unlinked' : 'available')
       && (!length || entry.username.length === length) && entry.username.includes(query)
       && [...entry.username].every((character) => alphabet(type, mode).includes(character)))
       .sort((a, b) => b.checkedAt - a.checkedAt || a.username.localeCompare(b.username));
