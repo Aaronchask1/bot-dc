@@ -138,7 +138,7 @@ test('vanity sin invitación no equivale a disponibilidad garantizada', async ()
   assert.match(textOf(lookup.__test.panel({ ...makeSession(), type: 'vanities' })), /NO garantiza/);
 });
 
-test('una búsqueda a la vez, cancelación y límite de doce candidatos', async () => {
+test('una búsqueda a la vez, cancelación y límite de 25 candidatos', async () => {
   const h = harness();
   let stopped = false;
   const result = await h.service.discover(filters, { shouldStop: () => stopped, onProgress: async () => {
@@ -147,7 +147,7 @@ test('una búsqueda a la vez, cancelación y límite de doce candidatos', async 
   } });
   assert.equal(result.status, 'cancelled');
   assert.equal(h.calls.length, 1);
-  assert.equal((await h.service.discover(filters, { limit: 1000 })).checked, 12);
+  assert.equal((await h.service.discover(filters, { limit: 1000 })).checked, 25);
 });
 
 test('panel V2: cinco botones válidos, avatar y modales', () => {

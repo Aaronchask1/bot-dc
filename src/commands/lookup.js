@@ -81,7 +81,7 @@ function panel(session, { closed = false } = {}) {
   };
   const lines = result.entries.map(({ username, status, checkedAt }) =>
     `\`${username}\` · **${statusLabels[status] ?? 'Estado no verificable'}** · comprobado <t:${Math.floor(checkedAt / 1000)}:R>`);
-  const suggested = result.entries.length ? '' : (session.suggestions?.length
+  const suggested = result.entries.length || session.running ? '' : (session.suggestions?.length
     ? `**Sugerencias sin comprobar (hasta 25)**\n${session.suggestions.map((username) => `\`${username}\``).join(' · ')}\n\n`
     : '');
   const empty = 'Todavía no hay coincidencias comprobadas con estos filtros. 🔎 busca otra tanda; ⚙️ cambia los filtros.';

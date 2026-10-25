@@ -6,7 +6,7 @@ const INTERVAL_MS = 6000;
 const AVAILABLE_TTL = 15 * 60_000;
 const TAKEN_TTL = 60 * 60_000;
 const MAX_CACHE = 25_000;
-const BATCH_SIZE = 12;
+const BATCH_SIZE = 25;
 const RAPIDAPI_HOST = 'discord-username-availability-checker-api.p.rapidapi.com';
 
 function validName(type, value) {
