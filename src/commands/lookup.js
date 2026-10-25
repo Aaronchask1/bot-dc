@@ -53,7 +53,7 @@ function createSession(user, guildId, filters, now = Date.now()) {
   return session;
 }
 
-function suggestions(filters, amount = 8) {
+function suggestions(filters, amount = 25) {
   const values = new Set();
   for (let attempt = 0; values.size < amount && attempt < amount * 80; attempt += 1) {
     const value = history.candidate(filters);
@@ -74,10 +74,15 @@ function panel(session, { closed = false } = {}) {
   const filters = [session.length ? `${session.length} caracteres` : 'Todas las longitudes'];
   if (session.mode !== 'todos') filters.push(MODE_LABELS[session.mode]);
   if (session.query) filters.push(`contiene \`${session.query}\``);
-  const lines = result.entries.map(({ username, checkedAt }) =>
-    `\`${username}\` · comprobado <t:${Math.floor(checkedAt / 1000)}:R>`);
+  const statusLabels = {
+    available: '✅ Disponible',
+    taken: '❌ No disponible',
+    unlinked: '⚠️ Sin invitación activa (no garantiza disponibilidad)',
+  };
+  const lines = result.entries.map(({ username, status, checkedAt }) =>
+    `\`${username}\` · **${statusLabels[status] ?? 'Estado no verificable'}** · comprobado <t:${Math.floor(checkedAt / 1000)}:R>`);
   const suggested = result.entries.length ? '' : (session.suggestions?.length
-    ? `**Sugerencias sin comprobar**\n${session.suggestions.map((username) => `\`${username}\``).join(' · ')}\n\n`
+    ? `**Sugerencias sin comprobar (hasta 25)**\n${session.suggestions.map((username) => `\`${username}\``).join(' · ')}\n\n`
     : '');
   const empty = 'Todavía no hay coincidencias comprobadas con estos filtros. 🔎 busca otra tanda; ⚙️ cambia los filtros.';
   const caveat = session.type === 'vanities'
@@ -91,7 +96,7 @@ function panel(session, { closed = false } = {}) {
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(lines.join('\n') || `${suggested}${empty}`))
     .addSeparatorComponents(new SeparatorBuilder())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      `-# Página ${result.page + 1}/${result.pages} · ${result.total} resultados${closed ? ' · Cerrado' : ''}\n${session.notice ?? 'Preparando búsqueda global…'}\n-# ${caveat}`,
+      `-# Página ${result.page + 1}/${result.pages} · ${result.total} resultados${closed ? ' · Cerrado' : ''}\n${session.notice ?? 'Preparando búsqueda global…'}\n-# Estado: ✅ disponible / ❌ no disponible · ${caveat}`,
     ))
     .addActionRowComponents(new ActionRowBuilder().addComponents(
       button(session, 'prev', '◀️', ButtonStyle.Secondary, closed || result.page === 0),
