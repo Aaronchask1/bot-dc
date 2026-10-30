@@ -97,6 +97,14 @@ const FALLBACK_GIFS = {
     'https://cdn.otakugifs.xyz/gifs/laugh/tFRZ88Dt24b5.gif',
     'https://cdn.otakugifs.xyz/gifs/laugh/58dac589db5416ed.gif',
   ],
+  wink: ['https://cdn.otakugifs.xyz/gifs/wink/KOLnUuQpNg.gif'],
+  smile: ['https://cdn.otakugifs.xyz/gifs/smile/4ce74643f35d606c.gif'],
+  tickle: ['https://cdn.otakugifs.xyz/gifs/tickle/cf51f54dc51f8bf9.gif'],
+  punch: ['https://cdn.otakugifs.xyz/gifs/punch/05bc002e281ddd92.gif'],
+  happy: ['https://cdn.otakugifs.xyz/gifs/happy/W7tz474WLB.gif'],
+  sleep: ['https://cdn.otakugifs.xyz/gifs/sleep/10ffda642616328b.gif'],
+  stare: ['https://cdn.otakugifs.xyz/gifs/stare/rvYCQ3eRMbfP.gif'],
+  scared: ['https://cdn.otakugifs.xyz/gifs/scared/8b66dab477403442.gif'],
 };
 
 const ACTIONS = {
@@ -172,6 +180,14 @@ const ACTIONS = {
     gif: 'laugh', verb: 'se ríe con', solo: 'se ríe', color: 0xFFD166,
     description: 'Jajaja, no aguanto.',
   },
+  wink: { gif: 'wink', verb: 'guiña un ojo a', solo: 'guiña un ojo', color: 0xFFB4D8, description: 'Un guiño cómplice.' },
+  smile: { gif: 'smile', verb: 'sonríe a', solo: 'sonríe', color: 0xFFD166, description: 'Una sonrisa para compartir.' },
+  tickle: { gif: 'tickle', verb: 'hace cosquillas a', solo: 'se hace cosquillas', color: 0xFF9CC4, description: '¡Cosquillas!' },
+  punch: { gif: 'punch', verb: 'lanza un puñetazo de juego a', solo: 'entrena puñetazos', color: 0xFF746C, description: 'Un golpe de juego.' },
+  happy: { gif: 'happy', verb: 'celebra con', solo: 'está feliz', color: 0xFFD166, description: '¡Un momento feliz!' },
+  sleep: { gif: 'sleep', verb: 'duerme junto a', solo: 'se queda dormido/a', color: 0xC792EA, description: 'Hora de descansar.' },
+  stare: { gif: 'stare', verb: 'mira fijamente a', solo: 'mira fijamente', color: 0x7ED6FF, description: 'Una mirada misteriosa.' },
+  scared: { gif: 'scared', verb: 'se asusta junto a', solo: 'se lleva un susto', color: 0xC792EA, description: '¡Qué susto!' },
 };
 
 // Alias en español para que `xyb cachetada`, `xyb hola` o `xyb bailar`
@@ -193,6 +209,14 @@ const ACTION_ALIASES = {
   sonrojar: 'blush',
   llorar: 'cry',
   reir: 'laugh',
+  guino: 'wink',
+  sonreir: 'smile',
+  cosquillas: 'tickle',
+  punetazo: 'punch',
+  feliz: 'happy',
+  dormir: 'sleep',
+  mirar: 'stare',
+  asustar: 'scared',
 };
 
 const pools = new Map(Object.entries(FALLBACK_GIFS).map(([kind, urls]) => [kind, [...urls]]));

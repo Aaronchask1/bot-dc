@@ -49,6 +49,11 @@ const bagCommand = require('./commands/bag');
 const petCommand = require('./commands/pet');
 const gamesCommand = require('./commands/games');
 const quoteCommand = require('./commands/quote');
+const autoroleCommand = require('./commands/autorole');
+const ticketsCommand = require('./commands/tickets');
+const giveawayCommand = require('./commands/giveaway');
+const selfroleCommand = require('./commands/selfrole');
+const guildEvents = require('./lib/guild-events');
 
 const PREFIX = 'xyb';
 const REPEATED_MESSAGE_LIMIT = 8;
@@ -151,7 +156,7 @@ const EXTRA_COMMAND_CATEGORIES = {
   fun: 'diversion', games: 'diversion',
   play: 'musica', pause: 'musica', resume: 'musica', skip: 'musica', queue: 'musica', np: 'musica', stop: 'musica', volume: 'musica', mb: 'musica', ytm: 'musica',
   balance: 'economia', work: 'economia', fish: 'economia', mine: 'economia', daily: 'economia', bank: 'economia', deposit: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia', pet: 'economia',
-  add: 'servidor', autoresponder: 'servidor', autoreact: 'servidor', prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor',
+  add: 'servidor', autoresponder: 'servidor', autoreact: 'servidor', prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor', autorole: 'servidor', tickets: 'servidor', giveaway: 'servidor', selfrole: 'servidor', memberlogs: 'servidor', despedida: 'servidor', warn: 'moderacion',
   purge: 'moderacion', unban: 'moderacion', rol: 'moderacion', steal: 'moderacion',
 };
 
@@ -592,6 +597,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   });
   reminders.start(readyClient);
   guildTag.start(readyClient);
+  giveawayCommand.start(readyClient);
 
   if (process.env.MEMBERS_INTENT !== 'true') {
     const configured = readyClient.guilds.cache.some((guild) => Boolean(welcome.getConfig(guild.id).channel));
@@ -613,6 +619,13 @@ client.on(Events.MessageDelete, (message) => {
 
 // Bienvenida configurada desde `xyb welcome`. Necesita el intent Server Members.
 client.on(Events.GuildMemberAdd, (member) => welcome.handleMemberAdd(member));
+client.on(Events.GuildMemberAdd, (member) => {
+  autoroleCommand.handleMemberAdd(member).catch((error) => logger.error('No pude asignar el autorol', error));
+  guildEvents.handleMemberAdd(member).catch((error) => logger.error('No pude registrar la entrada', error));
+});
+client.on(Events.GuildMemberRemove, (member) => {
+  guildEvents.handleMemberRemove(member).catch((error) => logger.error('No pude registrar la salida', error));
+});
 
 /**
  * Los prefijos extra que se agregan con `xyb prefix add !` se reescriben a `xyb`
@@ -795,6 +808,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 async function handleInteraction(interaction) {
+  if (await ticketsCommand.handleComponent(interaction)) return;
+  if (await giveawayCommand.handleComponent(interaction)) return;
+  if (await selfroleCommand.handleComponent(interaction)) return;
   if (await depositCommand.handleComponent(interaction)) return;
   if (await shopCommand.handleComponent(interaction)) return;
   if (await bagCommand.handleComponent(interaction)) return;

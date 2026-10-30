@@ -1,4 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const boardGames = require('../lib/board-games');
 
 const FACTS = {
   catfact: ['Los gatos duermen entre 12 y 16 horas al día.', 'El ronroneo de un gato también puede aparecer cuando se calma a sí mismo.'],
@@ -41,13 +42,17 @@ function triviaPayload(user, guildId) {
 
 module.exports = {
   name: 'games',
-  aliases: ['game', 'banana', 'catfact', 'dogfact', 'guess', 'hangman', 'kitty', 'pupper', 'lucky', 'match', 'petpet', 'reputation', 'roll', 'rps', 'say', 'spongify', 'stonks', 'tictactoe', 'traderep', 'trivia', 'tweet', 'unscramble', 'ask', 'chatbot', 'character', 'confess', 'delete', 'describe', 'dream', 'emojimixer', 'reimagine', 'upscale'],
+  aliases: ['game', 'banana', 'catfact', 'dogfact', 'guess', 'hangman', 'kitty', 'pupper', 'lucky', 'match', 'petpet', 'reputation', 'roll', 'rps', 'say', 'spongify', 'stonks', 'tictactoe', 'connect4', 'findemoji', 'memory', 'memoria', 'traderep', 'trivia', 'tweet', 'unscramble', 'ask', 'chatbot', 'character', 'confess', 'delete', 'describe', 'dream', 'emojimixer', 'reimagine', 'upscale'],
   description: 'Minijuegos, datos, suerte y utilidades divertidas.',
   usage: 'xyb games acción [texto] · también xyb trivia, xyb rps o xyb roll', guildOnly: false,
-  slash: { description: 'Minijuegos y diversión.', setup(builder) { return builder.addStringOption((o) => o.setName('accion').setDescription('trivia, rps, roll, guess, unscramble…').setRequired(true)).addStringOption((o) => o.setName('texto').setDescription('Respuesta o texto')); } },
-  async execute({ invokedName, args = [], text, isSlash, interaction, guild, user, reply, fail }) {
+  slash: { description: 'Minijuegos y diversión.', setup(builder) { return builder.addStringOption((o) => o.setName('accion').setDescription('trivia, rps, roll, tictactoe, connect4…').setRequired(true)).addStringOption((o) => o.setName('texto').setDescription('Respuesta o texto')).addUserOption((o) => o.setName('usuario').setDescription('Contrincante para juegos de mesa')); } },
+  async execute({ invokedName, args = [], text, isSlash, interaction, guild, channel, user, target, reply, fail }) {
     const action = isSlash ? interaction.options.getString('accion', true).toLowerCase() : gameAction(invokedName, args);
     const body = isSlash ? (interaction.options.getString('texto') ?? '').trim() : (invokedName === 'games' || invokedName === 'game' ? args.join(' ') : text).trim();
+    if (['tictactoe','connect4','findemoji','memory','memoria'].includes(action)) {
+      try { return await reply(boardGames.create(action === 'memoria' ? 'memory' : action, user, target, channel?.id ?? interaction?.channelId)); }
+      catch (error) { return fail(error.message); }
+    }
     if (FACTS[action]) return reply(`🐾 ${pick(FACTS[action])}`);
     if (action === 'banana') return reply(`🍌 La banana de ${user.username} mide **${1 + Math.floor(Math.random() * 30)} cm**. Ciencia totalmente seria.`);
     if (action === 'lucky') return reply(`🥠 ${pick(LUCKY)}`);
@@ -60,21 +65,42 @@ module.exports = {
     if (action === 'kitty' || action === 'pupper') return reply(`🐾 Usa \`xyb img ${action === 'kitty' ? 'gato' : 'perro'}\` para recibir una imagen con fuente y licencia.`);
     if (action === 'match') return reply(`💞 El medidor de vibra de ${user.username}: **${1 + Math.floor(Math.random() * 100)}%**.`);
     if (action === 'guess') {
-      const key = gameKey(guild, user, 'guess'); const current = active.get(key);
+      const key = gameKey(guild, user, 'guess'); let current = active.get(key);
+      if (current && current.until <= Date.now()) { active.delete(key); current = null; }
       if (!current) { active.set(key, { answer: 1 + Math.floor(Math.random() * 20), until: Date.now() + 5 * 60_000 }); return reply('🔢 Pensé un número del **1 al 20**. Adivínalo con `xyb guess número`.'); }
       const guess = Number(body); if (!Number.isInteger(guess)) return fail('Escribe un número del 1 al 20.'); if (guess === current.answer) { active.delete(key); return reply('🎉 ¡Correcto!'); } return reply(guess < current.answer ? '📈 Más alto.' : '📉 Más bajo.');
     }
-    if (action === 'unscramble' || action === 'hangman') {
-      const key = gameKey(guild, user, action); const current = active.get(key);
+    if (action === 'hangman') {
+      const key = gameKey(guild, user, action); let round = active.get(key);
+      if (round && round.until <= Date.now()) { active.delete(key); round = null; }
+      if (!round) { round = { answer: pick(WORDS), guessed: [], mistakes: 0, until: Date.now() + 5 * 60_000 }; active.set(key, round); }
+      const letter = body.toLowerCase();
+      if (letter === 'salir') { active.delete(key); return reply('Partida de ahorcado terminada.'); }
+      if (letter) {
+        if (!/^[a-z]$/.test(letter)) return fail('Escribe una sola letra: `xyb hangman a`.');
+        if (round.guessed.includes(letter)) return fail('Ya intentaste esa letra.');
+        round.guessed.push(letter);
+        if (!round.answer.includes(letter)) round.mistakes++;
+        round.until = Date.now() + 5 * 60_000;
+      }
+      const display = [...round.answer].map(c => round.guessed.includes(c) ? c : '＿').join(' ');
+      if ([...round.answer].every(c => round.guessed.includes(c))) { active.delete(key); return reply(`🎉 ¡Ganaste! La palabra era **${round.answer}**.`); }
+      if (round.mistakes >= 6) { active.delete(key); return reply(`💔 Sin intentos. La palabra era **${round.answer}**.`); }
+      return reply(`🔤 **Ahorcado**\n${display}\nErrores: **${round.mistakes}/6** · Letras: ${round.guessed.join(', ') || 'ninguna'}\nUsa \`xyb hangman letra\` o \`xyb hangman salir\`.`);
+    }
+    if (action === 'unscramble') {
+      const key = gameKey(guild, user, action); let current = active.get(key);
+      if (current && current.until <= Date.now()) { active.delete(key); current = null; }
       if (!current) { const answer = pick(WORDS); active.set(key, { answer, until: Date.now() + 5 * 60_000 }); return reply(`🔤 Adivina la palabra: **${shuffled(answer)}**\nResponde con \`xyb ${action} palabra\`.`); }
       if (body.toLowerCase() === current.answer) { active.delete(key); return reply('🎉 ¡La adivinaste!'); } return reply('❌ No es esa. Inténtalo otra vez.');
     }
     if (action === 'trivia') return reply(triviaPayload(user, guild?.id));
     if (['ask', 'chatbot', 'character', 'dream', 'reimagine', 'upscale', 'describe'].includes(action)) return reply('✨ Ese comando necesita un proveedor de IA o de edición de imágenes conectado. Por ahora puedes usar `xyb img descripción` para buscar imágenes existentes.');
-    if (['confess', 'tweet', 'delete', 'emojimixer', 'reputation', 'traderep', 'tictactoe'].includes(action)) return reply(`🎮 **${action}** está reservado para su versión interactiva; el resto de minijuegos ya está disponible.`);
+    if (['confess', 'tweet', 'delete', 'emojimixer', 'reputation', 'traderep'].includes(action)) return reply(`🎮 **${action}** está reservado para su versión interactiva; el resto de minijuegos ya está disponible.`);
     return fail('Prueba `xyb trivia`, `xyb rps piedra`, `xyb roll 1 20`, `xyb guess`, `xyb unscramble`, `xyb catfact` o `xyb spongify texto`.');
   },
   async handleComponent(interaction) {
+    if (await boardGames.handle(interaction)) return true;
     if (!interaction.isButton?.() || !interaction.customId?.startsWith('trivia:')) return false;
     const [, id, rawAnswer] = interaction.customId.split(':'); const round = triviaRounds.get(id);
     if (!round || round.expires < Date.now()) { triviaRounds.delete(id); await interaction.reply({ content: 'Esta trivia ya caducó. Inicia otra con `xyb trivia`.', ephemeral: true }); return true; }
