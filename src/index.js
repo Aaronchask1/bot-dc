@@ -146,7 +146,7 @@ const CORE_HELP_COMMANDS = [
 
 const EXTRA_COMMAND_CATEGORIES = {
   hug: 'social', marry: 'social', wife: 'social', divorce: 'social', act: 'social',
-  img: 'perfil', avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil', quote: 'perfil', profile: 'perfil',
+  img: 'perfil', avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil', quote: 'perfil', profile: 'perfil', userinfo: 'perfil', color: 'perfil', calc: 'perfil', timestamp: 'perfil',
   afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad',
   fun: 'diversion', games: 'diversion',
   play: 'musica', pause: 'musica', resume: 'musica', skip: 'musica', queue: 'musica', np: 'musica', stop: 'musica', volume: 'musica', mb: 'musica', ytm: 'musica',
