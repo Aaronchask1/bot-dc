@@ -1,5 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const boardGames = require('../lib/board-games');
+const { createStore } = require('../store');
+const { randomBytes } = require('node:crypto');
 
 const FACTS = {
   catfact: ['Los gatos duermen entre 12 y 16 horas al día.', 'El ronroneo de un gato también puede aparecer cuando se calma a sí mismo.'],
@@ -7,28 +9,45 @@ const FACTS = {
 };
 const LUCKY = ['Hoy una pequeña decisión te abrirá una puerta.', 'La paciencia te dará mejor resultado que la prisa.', 'Comparte algo bonito: volverá multiplicado.'];
 const TRIVIA = [
-  { q: 'Los padres de Coraline aman la tierra al comienzo de la película.', answer: true, image: 'https://media.tenor.com/lfzDXKjhSx4AAAAC/coraline.gif' },
+  { q: 'La Luna es un satélite natural de la Tierra.', answer: true },
   { q: 'Un pulpo tiene exactamente seis corazones.', answer: false },
   { q: 'Saturno es el único planeta con anillos.', answer: false },
   { q: 'La miel puede conservarse durante muchísimo tiempo sin estropearse.', answer: true },
   { q: 'Los pingüinos pueden volar largas distancias.', answer: false },
+  { q: 'La Tierra tarda aproximadamente un año en orbitar el Sol.', answer: true },
+  { q: 'El océano Pacífico es más grande que el Atlántico.', answer: true },
+  { q: 'El agua hierve siempre a 50 °C al nivel del mar.', answer: false },
+  { q: 'Los murciélagos son mamíferos.', answer: true },
+  { q: 'Venus es el planeta más cercano al Sol.', answer: false },
+  { q: 'El Sol es una estrella.', answer: true },
+  { q: 'Una araña tiene seis patas.', answer: false },
+  { q: 'La Gran Muralla China está en China.', answer: true },
+  { q: 'Un triángulo tiene cuatro lados.', answer: false },
+  { q: 'Las ballenas respiran aire.', answer: true },
+  { q: 'La capital de Japón es Tokio.', answer: true },
+  { q: 'Una hora tiene 100 minutos.', answer: false },
+  { q: 'Las abejas pueden ayudar a polinizar flores.', answer: true },
+  { q: 'Marte es conocido como el planeta rojo.', answer: true },
+  { q: 'Los cocodrilos son aves.', answer: false },
 ];
 const WORDS = ['discord', 'conejo', 'aventura', 'mascota', 'galaxia'];
 const active = new Map();
 const triviaRounds = new Map();
-const triviaPoints = new Map();
+const triviaPoints = createStore('trivia-points');
 const pick = (items) => items[Math.floor(Math.random() * items.length)];
 const gameKey = (guild, user, type) => `${guild?.id ?? 'dm'}:${user.id}:${type}`;
 const sponge = (text) => [...text].map((char, index) => index % 2 ? char.toLowerCase() : char.toUpperCase()).join('');
 function shuffled(word) { return [...word].sort(() => Math.random() - 0.5).join(''); }
 function gameAction(invokedName, args) { return invokedName === 'games' || invokedName === 'game' ? args.shift()?.toLowerCase() : invokedName; }
 function triviaKey(guildId, userId) { return `${guildId ?? 'dm'}:${userId}`; }
+function triviaScore(key) { const points = triviaPoints.get(key); return Number.isSafeInteger(points) && points >= 0 ? points : 0; }
 function triviaPayload(user, guildId) {
-  const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  for (const [key, round] of triviaRounds) if (round.expires <= Date.now()) triviaRounds.delete(key);
+  const id = randomBytes(8).toString('hex');
   const question = pick(TRIVIA); const key = triviaKey(guildId, user.id);
   const round = { id, userId: user.id, question, expires: Date.now() + 20_000 };
   triviaRounds.set(id, round);
-  const points = triviaPoints.get(key) ?? 0;
+  const points = triviaScore(key);
   const embed = new EmbedBuilder().setColor(0xA92FEA).setAuthor({ name: user.username, iconURL: user.displayAvatarURL?.({ size: 64 }) })
     .setTitle('🧠 Trivia XYB').setDescription(`**${question.q}**\n\nTienes **20 segundos** para elegir la respuesta correcta.`)
     .setFooter({ text: `Puntos: ${points} · Solo tú puedes responder` });
@@ -107,7 +126,7 @@ module.exports = {
     if (round.userId !== interaction.user.id) { await interaction.reply({ content: 'Solo quien inició esta trivia puede responder.', ephemeral: true }); return true; }
     triviaRounds.delete(id);
     const correct = String(round.question.answer) === rawAnswer; const key = triviaKey(interaction.guildId, interaction.user.id);
-    const points = (triviaPoints.get(key) ?? 0) + (correct ? 1 : 0); triviaPoints.set(key, points);
+    const points = triviaScore(key) + (correct ? 1 : 0); if (correct) triviaPoints.set(key, points);
     const embed = new EmbedBuilder().setColor(correct ? 0x57F287 : 0xED4245).setTitle(correct ? '✅ ¡Correcto!' : '❌ Incorrecto')
       .setDescription(`**${round.question.q}**\n\nLa respuesta era **${round.question.answer ? 'Verdadero' : 'Falso'}**.`)
       .setFooter({ text: `Puntos: ${points}` });
