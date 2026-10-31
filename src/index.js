@@ -54,6 +54,7 @@ const ticketsCommand = require('./commands/tickets');
 const giveawayCommand = require('./commands/giveaway');
 const selfroleCommand = require('./commands/selfrole');
 const guildEvents = require('./lib/guild-events');
+const { startDashboardBridge } = require('./lib/dashboard-bridge');
 
 const PREFIX = 'xyb';
 const REPEATED_MESSAGE_LIMIT = 8;
@@ -598,6 +599,10 @@ client.once(Events.ClientReady, async (readyClient) => {
   reminders.start(readyClient);
   guildTag.start(readyClient);
   giveawayCommand.start(readyClient);
+  try {
+    const bridge = startDashboardBridge(readyClient);
+    if (bridge) bridge.on('error', (error) => logger.error('No pude iniciar el puente privado del panel', error));
+  } catch (error) { logger.error('Configuración inválida del puente privado del panel', error); }
 
   if (process.env.MEMBERS_INTENT !== 'true') {
     const configured = readyClient.guilds.cache.some((guild) => Boolean(welcome.getConfig(guild.id).channel));

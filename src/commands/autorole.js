@@ -49,4 +49,9 @@ module.exports = {
   handleMemberAdd,
   validateRole,
   hasPrivilegedPermissions,
+  getConfiguredRole(guildId) { return store.get(guildId) ?? null; },
+  setConfiguredRole(guildId, roleId) {
+    if (roleId === null) store.delete(guildId);
+    else store.set(guildId, roleId);
+  },
 };
