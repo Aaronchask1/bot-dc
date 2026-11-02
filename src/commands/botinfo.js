@@ -20,9 +20,9 @@ function formatUptime(milliseconds) {
 module.exports = {
   name: 'botinfo',
   aliases: ['info', 'stats', 'estadisticas'],
-  description: 'Información técnica del bot.',
-  usage: 'xyb botinfo',
-  slash: { description: 'Información técnica del bot.' },
+  description: 'Información del bot y servidor de soporte.',
+  usage: 'xyb info (también xyb botinfo)',
+  slash: { description: 'Información del bot y soporte.' },
 
   async execute({ client, guild, user, reply }) {
     const memory = process.memoryUsage();
@@ -43,6 +43,7 @@ module.exports = {
         { name: '📚 discord.js', value: `\`v${djsVersion}\``, inline: true },
         { name: '🟢 Node', value: `\`${process.version}\``, inline: true },
         { name: '💻 Sistema', value: `\`${os.platform()} ${os.arch()}\``, inline: true },
+        { name: '🛟 Soporte', value: '[Únete al servidor de soporte](https://discord.gg/xyb)', inline: false },
       )
       .setFooter({ text: `Consultado por ${user.tag} · 🐰 xyb` })
       .setTimestamp();

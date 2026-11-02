@@ -103,6 +103,8 @@ function checkAccess(command, context) {
 
 const PERMISSION_NAMES = {
   Administrator: 'Administrador',
+  KickMembers: 'Expulsar miembros',
+  BanMembers: 'Banear miembros',
   ManageGuild: 'Gestionar servidor',
   ManageRoles: 'Gestionar roles',
   ManageMessages: 'Gestionar mensajes',
