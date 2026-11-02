@@ -43,7 +43,7 @@ module.exports = {
         { name: '📚 discord.js', value: `\`v${djsVersion}\``, inline: true },
         { name: '🟢 Node', value: `\`${process.version}\``, inline: true },
         { name: '💻 Sistema', value: `\`${os.platform()} ${os.arch()}\``, inline: true },
-        { name: '🛟 Soporte', value: '[Únete al servidor de soporte](https://discord.gg/xyb)', inline: false },
+        { name: '🛟 Panel de soporte', value: '[Abrir el panel de Xyb](https://xyb-dashboard-web-asd.up.railway.app/)', inline: false },
       )
       .setFooter({ text: `Consultado por ${user.tag} · 🐰 xyb` })
       .setTimestamp();
