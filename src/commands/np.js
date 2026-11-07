@@ -3,7 +3,7 @@ const music = require('../music/manager');
 
 module.exports = {
     name: 'np',
-    aliases: ['nowplaying', 'sonando'],
+    aliases: ['nowplaying', 'sonando', 'now'],
     description: 'Muestra la canción que está sonando.',
     usage: 'xyb np',
     guildOnly: true,

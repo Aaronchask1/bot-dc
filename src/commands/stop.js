@@ -2,7 +2,7 @@ const music = require('../music/manager');
 
 module.exports = {
     name: 'stop',
-    aliases: ['detener', 'disconnect'],
+    aliases: ['detener', 'disconnect', 'leave'],
     description: 'Detiene la música, vacía la cola y sale del canal de voz.',
     usage: 'xyb stop',
     guildOnly: true,
@@ -11,7 +11,7 @@ module.exports = {
     async execute(ctx) {
         const info = music.getSessionInfo(ctx.guild.id);
 
-        if (!info?.current && !info?.queue.length) {
+        if (!info) {
             return ctx.fail('❌ No estoy reproduciendo nada.');
         }
 

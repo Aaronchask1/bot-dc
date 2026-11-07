@@ -15,6 +15,7 @@ const ytdlp = require('./ytdlp');
 const youtube = require('./youtube');
 const soundcloud = require('./soundcloud');
 const itunes = require('./itunes');
+const spotify = require('./spotify');
 
 const LEAVE_DELAY_MS = 2 * 60 * 1000;
 
@@ -49,6 +50,7 @@ function getSession(guildId, client) {
             connection: null,
             player: null,
             queue: [],
+            history: [],
             current: null,
             stream: null,
             textChannelId: null,
@@ -85,6 +87,7 @@ function getSession(guildId, client) {
                 return;
             }
 
+            if (session.current) session.history.push(session.current);
             session.current = null;
             session.playStartedAt = null;
             playNext(guildId);
@@ -166,6 +169,10 @@ async function ensureConnection(source) {
         const error = new Error('Necesitas estar en un canal de voz.');
         error.code = 'NOVOICE';
         throw error;
+    }
+    const existing = sessions.get(guild.id);
+    if (existing?.connection && existing.connection.joinConfig.channelId !== voiceChannel.id) {
+        throw new Error('Ya estoy en otro canal de voz. Únete a ese canal para controlarme.');
     }
 
     const permissions = voiceChannel.permissionsFor(guild.members.me);
@@ -279,7 +286,7 @@ async function announce(session, track) {
         if (track.url) embed.setURL(track.url);
         if (track.thumbnail) embed.setThumbnail(track.thumbnail);
 
-        await channel.send({ embeds: [embed] });
+        await channel.send(require('./panel').payload(session.guildId));
     } catch (error) {
         console.error('[MUSIC] No pude enviar el embed:', error.message);
     }
@@ -296,6 +303,14 @@ async function startTrack(guildId, track, { seek = 0, keepPaused = false, silent
     let retry = false;
 
     try {
+        if (track.pendingResolve) {
+            const resolved = await resolveTrack(track.query);
+            if (token !== session.loadToken || sessions.get(guildId) !== session) {
+                retry = sessions.get(guildId) === session;
+                return;
+            }
+            Object.assign(track, resolved, { pendingResolve: false });
+        }
         const cachedUrl = session.directTrackId === track.id ? session.directUrl : null;
 
         destroyCurrentStream(session);
@@ -543,18 +558,36 @@ async function resolveTrack(query) {
 
 async function enqueue(source, query) {
     const session = await ensureConnection(source);
-
-    const track = await resolveTrack(query);
+    const importToken = session.loadToken;
+    const collection = await spotify.read(query);
+    const tracks = collection?.tracks || [await resolveTrack(query)];
+    if (sessions.get(source.guild.id) !== session || session.loadToken !== importToken) {
+        throw new Error('La reproducción cambió mientras cargaba el enlace. Vuelve a intentarlo.');
+    }
     const user = source.author ?? source.user;
-    track.requestedBy = user?.username ?? user?.tag ?? 'Desconocido';
-
-    session.queue.push(track);
+    for (const track of tracks) track.requestedBy = user?.username ?? user?.tag ?? 'Desconocido';
+    session.queue.push(...tracks);
 
     if (!session.current && session.player.state.status !== AudioPlayerStatus.Playing) {
         playNext(source.guild.id);
     }
 
-    return { track, position: session.queue.length, session };
+    return { track: tracks[0], count: tracks.length, publicOnly: collection?.publicOnly, position: session.queue.length, session };
+}
+
+function previous(guildId) {
+    const session = sessions.get(guildId);
+    if (!session || session.advancing) return false;
+    const current = session.current;
+    const target = session.history.pop() || current;
+    if (!target) return false;
+    if (current && target !== current) session.queue.unshift(current);
+    session.queue.unshift(target);
+    session.current = null;
+    session.reloadPending = null;
+    session.loadToken++;
+    if (!session.player.stop(true)) playNext(guildId);
+    return true;
 }
 
 function skip(guildId) {
@@ -651,14 +684,17 @@ function getSessionInfo(guildId) {
         queue: session.queue,
         paused: session.player.state.status === AudioPlayerStatus.Paused,
         volume: session.volume,
-        position: getPositionSeconds(session)
+        position: getPositionSeconds(session),
+        channelId: session.connection?.joinConfig.channelId
     };
 }
 
 module.exports = {
     enqueue,
+    ensureConnection,
     resolveTrack,
     skip,
+    previous,
     stop,
     pause,
     resume,

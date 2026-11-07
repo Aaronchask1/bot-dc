@@ -33,7 +33,7 @@ module.exports = {
     name: 'play',
     aliases: ['p', 'tocar', 'reproducir'],
     description: 'Reproduce una canción de YouTube (o SoundCloud) en tu canal de voz.',
-    usage: 'xyb play <canción o URL de YouTube/SoundCloud>',
+    usage: 'xyb play <canción o enlace de YouTube/SoundCloud/Spotify>',
     guildOnly: true,
     botPermissions: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak],
     slash: {
@@ -62,7 +62,7 @@ module.exports = {
         if (!ctx.isSlash) waiting = await ctx.reply('🔎 Buscando...');
 
         try {
-            const { track } = await music.enqueue(ctx, query);
+            const { track, count, publicOnly } = await music.enqueue(ctx, query);
             const info = music.getSessionInfo(ctx.guild.id);
             const playingNow = info?.current?.id === track.id && info.queue.length === 0;
 
@@ -70,6 +70,8 @@ module.exports = {
                 `${playingNow ? '▶️ Reproduciendo' : '✅ Añadido a la cola'}: **${track.title}**`,
                 `> \`${track.uploader}\` • \`${music.formatDuration(track.duration)}\``
             ];
+            if (count > 1) lineas.unshift('📥 Añadidas **' + count + '** canciones a la cola.');
+            if (publicOnly) lineas.push('Spotify: se importaron las canciones visibles públicamente; las listas largas pueden estar limitadas.');
 
             if (!playingNow && info?.queue.length) {
                 lineas.push(`> Posición en la cola: \`${info.queue.length}\``);

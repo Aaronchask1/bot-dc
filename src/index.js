@@ -155,7 +155,7 @@ const EXTRA_COMMAND_CATEGORIES = {
   img: 'perfil', avatar: 'perfil', banner: 'perfil', ping: 'perfil', botinfo: 'perfil', snipe: 'perfil', lookup: 'perfil', quote: 'perfil', profile: 'perfil', userinfo: 'perfil', color: 'perfil', calc: 'perfil', timestamp: 'perfil',
   afk: 'comunidad', remind: 'comunidad', poll: 'comunidad', suggest: 'comunidad',
   fun: 'diversion', games: 'diversion',
-  play: 'musica', pause: 'musica', resume: 'musica', skip: 'musica', queue: 'musica', np: 'musica', stop: 'musica', volume: 'musica', mb: 'musica', ytm: 'musica',
+  play: 'musica', pause: 'musica', resume: 'musica', skip: 'musica', queue: 'musica', np: 'musica', stop: 'musica', volume: 'musica', mb: 'musica', ytm: 'musica', panel: 'musica', join: 'musica', previous: 'musica',
   balance: 'economia', work: 'economia', fish: 'economia', mine: 'economia', daily: 'economia', bank: 'economia', deposit: 'economia', pay: 'economia', rich: 'economia', bag: 'economia', shop: 'economia', trade: 'economia', pet: 'economia',
   add: 'servidor', autoresponder: 'servidor', autoreact: 'servidor', prefix: 'servidor', welcome: 'servidor', welcomevars: 'servidor', welcometest: 'servidor', roles: 'servidor', vc: 'servidor', autorole: 'servidor', tickets: 'servidor', giveaway: 'servidor', selfrole: 'servidor', memberlogs: 'servidor', despedida: 'servidor', warn: 'moderacion',
   purge: 'moderacion', unban: 'moderacion', rol: 'moderacion', steal: 'moderacion',
@@ -813,6 +813,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 async function handleInteraction(interaction) {
+  if (await require('./music/panel').handleComponent(interaction)) return;
   if (await ticketsCommand.handleComponent(interaction)) return;
   if (await giveawayCommand.handleComponent(interaction)) return;
   if (await selfroleCommand.handleComponent(interaction)) return;
